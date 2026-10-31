@@ -1,4 +1,4 @@
-"""Enseñarle cuándo algo está bien y cuándo no: gestos 👍/👎, palabras sí/no y negaciones."""
+"""Enseñarle cuándo algo está bien y cuándo no: gestos de asentir y negar, palabras sí/no y negaciones."""
 
 from server.brain.reasoning import CONFIRMADA, PENDIENTE, RECHAZADA
 from tests.conftest import hablas
@@ -37,7 +37,7 @@ def test_una_respuesta_que_no_entiende_no_la_adivina(muyu, reloj):
     hipotesis = preguntar_fuego_duele(muyu, decir)
     respuesta = decir("no")
     assert hipotesis.estado == PENDIENTE
-    assert respuesta["intencion"] == "preguntar" and "👎" in respuesta["detalle"]
+    assert respuesta["intencion"] == "preguntar" and "niega" in respuesta["detalle"]
     hacer("negar")
     assert hipotesis.estado == RECHAZADA
     assert muyu.lexico.polar(-1, muyu.reloj.tiempo) == "no"

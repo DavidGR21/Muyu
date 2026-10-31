@@ -320,6 +320,7 @@ Los navegadores **solo permiten el micrófono en HTTPS** (o en `localhost`). Par
 | Cerebro | Python puro + NumPy | 1 |
 | Almacenamiento | SQLite (un archivo por criatura) | 1 |
 | Cliente | HTML, CSS y JavaScript, Canvas | 1 |
+| Escena 3D | three.js (archivos locales) | 2 |
 | Pruebas | pytest | 1 |
 | Voz de criatura | Web Audio API | 2 |
 | STT | faster-whisper (modelo abierto local) | 3 |
@@ -365,10 +366,12 @@ muyu/
 │   ├── index.html
 │   ├── style.css
 │   ├── app.js                  # Conexión WebSocket, chat, acciones
-│   ├── creature.js             # Dibujo y expresiones de la criatura
+│   ├── creature.js             # Criatura 3D y sus expresiones (three.js)
 │   ├── brain-panel.js          # Panel: emociones, léxico, grafo, pensamientos
-│   ├── room.js                 # Habitación pixel art (fase 2)
-│   └── voice.js                # Sintetizador de criatura (fase 2)
+│   ├── room.js                 # Habitación 3D: objetos, luz del día y de la noche (fase 2)
+│   ├── voice.js                # Sintetizador de criatura (fase 2)
+│   ├── icons.js                # Iconos (Lucide, copiados localmente)
+│   └── vendor/                 # three.js (MIT) y licencias, sin CDN
 ├── data/creatures/             # <id>.sqlite (no se sube al repo)
 ├── models/
 │   ├── whisper/                # Modelo abierto descargado (fase 3, no se sube)

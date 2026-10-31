@@ -4,13 +4,15 @@
   "use strict";
 
   const $ = (selector) => document.querySelector(selector);
+  const icono = window.icono;
   const escapar = (texto) =>
     String(texto ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const firmado = (valor, decimales = 2) => (valor >= 0 ? "+" : "") + Number(valor).toFixed(decimales);
   const porcentaje = (valor) => `${Math.round(Math.max(0, Math.min(1, valor)) * 100)}%`;
 
   const ICONOS = {
-    recuerdo: "💭", deduccion: "💡", duda: "❓", opinion: "❤️", reencuentro: "🔁", sueno: "🌙", correccion: "✏️",
+    recuerdo: "message-circle", deduccion: "lightbulb", duda: "circle-help", opinion: "hand-heart", reencuentro: "repeat",
+    sueno: "moon-star", correccion: "pencil",
   };
   const NOMBRES_TIPO = {
     recuerdo: "recuerdo", deduccion: "deducción", duda: "duda", opinion: "opinión", reencuentro: "reencuentro", sueno: "sueño",
@@ -18,8 +20,8 @@
   };
   const NOMBRES_PAD = { p: "Placer", a: "Activación", d: "Dominancia" };
   const NOMBRES_NECESIDAD = {
-    energia: ["⚡", "Energía"], saciedad: ["🍎", "Saciedad"], compania: ["🤝", "Compañía"],
-    seguridad: ["🛡️", "Seguridad"], aburrimiento: ["🥱", "Aburrimiento"],
+    energia: ["zap", "Energía"], saciedad: ["utensils", "Saciedad"], compania: ["users", "Compañía"],
+    seguridad: ["shield", "Seguridad"], aburrimiento: ["hourglass", "Aburrimiento"],
   };
   const NOMBRES_EVALUACION = { inesperado: "inesperado", agrado: "agrado", amenaza: "amenaza", control: "control", relevancia: "relevancia" };
   const formatoHora = (hora) => `${String(Math.floor(hora)).padStart(2, "0")}:${String(Math.floor((hora % 1) * 60)).padStart(2, "0")}`;
@@ -171,7 +173,7 @@
         nodo.y += nodo.vy * this.calor;
         const margen = this._radio(nodo) + 4;
         nodo.x = Math.max(margen, Math.min(this.ancho - margen, nodo.x));
-        nodo.y = Math.max(margen, Math.min(this.alto - margen, nodo.y));
+        nodo.y = Math.max(margen, Math.min(this.alto - margen - 14, nodo.y));   // deja lugar a la etiqueta
       }
       this.calor = Math.max(0.05, this.calor * 0.995);
     }
@@ -181,9 +183,10 @@
       ctx.clearRect(0, 0, this.ancho, this.alto);
       if (!this.nodos.size) {
         ctx.fillStyle = "#9a9286";
-        ctx.font = "italic 14px system-ui";
+        ctx.font = "italic 12px system-ui";
         ctx.textAlign = "center";
-        ctx.fillText("La red nace vacía. Enséñale frases como «el fuego quema».", this.ancho / 2, this.alto / 2);
+        ctx.fillText("La red nace vacía.", this.ancho / 2, this.alto / 2 - 10);
+        ctx.fillText("Enséñale frases como «el fuego quema».", this.ancho / 2, this.alto / 2 + 10);
         return;
       }
       const alfa = { activo: 0.9, tenue: 0.55, latente: 0.2 };
@@ -266,6 +269,7 @@
       this.criatura = null;
       this.pensamientosVistos = new Set();
       this.grafo = new Grafo($("#lienzo-grafo"));
+      this.grafo.visible = true;
       document.querySelectorAll(".pestanas button").forEach((boton) =>
         boton.addEventListener("click", () => this.mostrar(boton.dataset.vista)));
       this._vistaTiempo();
@@ -275,11 +279,6 @@
       if (vista === "cuerpo") this._vistaCuerpo();
       document.querySelectorAll(".pestanas button").forEach((b) => b.classList.toggle("activa", b.dataset.vista === vista));
       document.querySelectorAll(".vista").forEach((v) => v.classList.toggle("activa", v.id === `vista-${vista}`));
-      this.grafo.visible = vista === "grafo";
-      if (this.grafo.visible) {
-        this.grafo._ajustar();
-        this.grafo.calor = 1;
-      }
     }
 
     identidad(datos) {
@@ -313,7 +312,7 @@
         .map(([rasgo, valor]) => `<span class="chip">${NOMBRES_RASGO[rasgo] || rasgo} ${valor.toFixed(2)}</span>`).join("");
       $("#vista-emocion").innerHTML = `
         <section class="tarjeta">
-          <h3>Emoción <span class="chip grande">${escapar(e.etiqueta)}</span>${estado.despierta ? "" : '<span class="chip">😴 dormida</span>'}</h3>
+          <h3>Emoción <span class="chip grande">${escapar(e.etiqueta)}</span>${estado.despierta ? "" : `<span class="chip">${icono("moon")}dormida</span>`}</h3>
           ${filasPad}
           <p class="nota">Espacio PAD (Mehrabian). Cambia en segundos y vuelve sola a su línea base.</p>
         </section>
@@ -323,7 +322,7 @@
           <p class="nota">Sigue a las emociones durante horas de su tiempo.</p>
         </section>
         <section class="tarjeta">
-          <h3>Impulsos ${e.ambivalencia > 0 ? '<span class="chip">⚖️ ambivalente</span>' : ""}</h3>
+          <h3>Impulsos ${e.ambivalencia > 0 ? `<span class="chip">${icono("scale")}ambivalente</span>` : ""}</h3>
           <div class="fila"><span>Acercarse</span>${barra01(impulsos.acercarse)}<span class="valor">${impulsos.acercarse.toFixed(2)}</span></div>
           <div class="fila"><span>Alejarse</span>${barra01(impulsos.alejarse, "tierra")}<span class="valor">${impulsos.alejarse.toFixed(2)}</span></div>
           <p class="nota">Puede querer acercarse y alejarse a la vez (curiosidad y miedo): entonces se acerca y retrocede.</p>
@@ -361,14 +360,14 @@
       const actual = this.ultimaActividad || comportamiento.actual;
       const necesidades = Object.entries(NOMBRES_NECESIDAD).map(([clave, [emoji, nombre]]) => {
         const valor = estado.necesidades[clave] || 0;
-        return `<div class="fila"><span>${emoji} ${nombre}</span>${barra01(valor, clave === "aburrimiento" ? "tierra" : "")}<span class="valor">${porcentaje(valor)}</span></div>`;
+        return `<div class="fila"><span>${icono(emoji)}${nombre}</span>${barra01(valor, clave === "aburrimiento" ? "tierra" : "")}<span class="valor">${porcentaje(valor)}</span></div>`;
       }).join("");
       const historial = (comportamiento.historial || []).slice(0, 8).map((a) => `
-        <li><span class="icono">•</span><div><b>${escapar(a.descripcion)}</b><small>${hace(estado.ahora_real - a.inicio)}</small>
+        <li><span class="marca-lista">${icono("activity")}</span><div><b>${escapar(a.descripcion)}</b><small>${hace(estado.ahora_real - a.inicio)}</small>
           <p>${escapar(a.motivo)}</p></div></li>`).join("");
       $("#vista-cuerpo").innerHTML = `
         <section class="tarjeta">
-          <h3>Ahora ${actual && actual.ambivalente ? '<span class="chip">⚖️ ambivalente</span>' : ""}</h3>
+          <h3>Ahora ${actual && actual.ambivalente ? `<span class="chip">${icono("scale")}ambivalente</span>` : ""}</h3>
           ${actual ? `<p><b>${escapar(actual.descripcion)}</b> — ${escapar(actual.motivo)}</p>
             <p class="nota">${actual.iniciativa === "dueño" ? "Lo hace porque interactuaste con ella." : "Lo eligió ella según cómo se siente."}</p>` : "<p class='vacio'>…</p>"}
         </section>
@@ -379,7 +378,7 @@
         </section>
         <section class="tarjeta">
           <h3>Su día</h3>
-          <p>🕗 ${formatoHora(estado.hora)} ${estado.noche ? "· es de noche 🌙" : "· es de día ☀️"} · somnolencia ${porcentaje(Math.min(1, estado.somnolencia))}</p>
+          <p>${icono("clock")} ${formatoHora(estado.hora)} · ${estado.noche ? `${icono("moon")} es de noche` : `${icono("sun")} es de día`} · somnolencia ${porcentaje(Math.min(1, estado.somnolencia))}</p>
           <p class="nota">Su reloj del día empezó a la hora en que nació. De noche le da sueño y se va sola a la cama.</p>
         </section>
         ${historial ? `<section class="tarjeta"><h3>Lo que hizo antes</h3><ul class="lista">${historial}</ul></section>` : ""}`;
@@ -416,7 +415,7 @@
           Math.abs(p.polaridad) >= 0.3 ? `significa «${p.polaridad > 0 ? "sí" : "no"}» (${firmado(p.polaridad)})` : "",
           p.interrogativa ? "abre preguntas" : "",
         ].filter(Boolean).join("\n");
-        const marca = Math.abs(p.polaridad) >= 0.3 ? (p.polaridad > 0 ? " ✓" : " ✗") : p.interrogativa ? " ¿" : "";
+        const marca = Math.abs(p.polaridad) >= 0.3 ? (p.polaridad > 0 ? " <small>sí</small>" : " <small>no</small>") : p.interrogativa ? " ¿" : "";
         return `<span class="palabra ${p.estado}" title="${escapar(titulo)}"><i class="val ${valencia}"></i>${escapar(p.palabra)}${marca}${p.veces_aprendida > 1 ? `<sup>↺${p.veces_aprendida}</sup>` : ""}<span class="imp" style="width:${porcentaje(p.importancia)}"></span></span>`;
       };
       const grupo = (clave, titulo, vacio) => `
@@ -437,9 +436,9 @@
           </section>`;
       }
       $("#vista-lexico").innerHTML = etapa
-        + grupo("activo", "🟢 Activas", "Ninguna todavía: repítele palabras.")
-        + grupo("tenue", "🟡 Tenues", "—")
-        + grupo("latente", "⚪ Latentes", "Nada latente: nunca olvida, solo atenúa.");
+        + grupo("activo", '<i class="punto activo"></i>Activas', "Ninguna todavía: repítele palabras.")
+        + grupo("tenue", '<i class="punto tenue"></i>Tenues', "—")
+        + grupo("latente", '<i class="punto latente"></i>Latentes', "Nada latente: nunca olvida, solo atenúa.");
     }
 
     _vistaPensamientos(pensamientos) {
@@ -447,11 +446,10 @@
       const items = pensamientos.map((p) => {
         const nuevo = !this.pensamientosVistos.has(p.id);
         this.pensamientosVistos.add(p.id);
-        const icono = p.tipo === "opinion" && /no le gusta/.test(p.explicacion) ? "💔" : ICONOS[p.tipo] || "💭";
-        return `<li class="${nuevo ? "nuevo" : ""}"><span class="icono">${icono}</span><div>
+        return `<li class="${nuevo ? "nuevo" : ""}"><span class="marca-lista ${p.tipo}">${icono(ICONOS[p.tipo] || "message-circle")}</span><div>
           <b>${escapar(p.texto)}</b><small>${NOMBRES_TIPO[p.tipo] || escapar(p.tipo)} · ${hace(ahora - p.momento_real)}</small>
           <p>${escapar(p.explicacion)}</p>
-          ${p.en_voz_alta ? `<p class="dicho">🗣 Lo dijo en voz alta: «${escapar(p.dicho)}»</p>` : ""}
+          ${p.en_voz_alta ? `<p class="dicho">Lo dijo en voz alta: «${escapar(p.dicho)}»</p>` : ""}
         </div></li>`;
       }).join("");
       $("#vista-pensamientos").innerHTML = items
@@ -461,7 +459,7 @@
 
     _vistaHipotesis(hipotesis) {
       const items = hipotesis.map((h) => `
-        <li class="hip"><span class="icono">${h.estado === "confirmada" ? "✅" : h.estado === "rechazada" ? "❌" : "💡"}</span><div>
+        <li class="hip"><span class="marca-lista ${h.estado}">${icono(h.estado === "confirmada" ? "circle-check" : h.estado === "rechazada" ? "circle-x" : "lightbulb")}</span><div>
           <b>${escapar(h.origen)} → ${escapar(h.destino)}</b>
           <span class="estado-chip ${h.estado}">${h.estado}</span>
           <div class="cadena">${escapar(h.camino)}</div>
@@ -476,7 +474,7 @@
       const estado = this.ultimoEstado;
       const cerebro = this.ultimoCerebro;
       const suenos = cerebro && cerebro.suenos.length
-        ? cerebro.suenos.map((s) => `<li><span class="icono">🌙</span><div><b>${escapar(s.conceptos.join("… ") || "(sin sueño)")}</b>
+        ? cerebro.suenos.map((s) => `<li><span class="marca-lista sueno">${icono("moon-star")}</span><div><b>${escapar(s.conceptos.join("… ") || "(sin sueño)")}</b>
             <p>Reforzó ${s.total_reforzados}: ${escapar(s.reforzados.join(", ") || "—")}</p>
             <p>Atenuó ${s.total_atenuados}: ${escapar(s.atenuados.join(", ") || "—")}</p></div></li>`).join("")
         : "";
@@ -502,7 +500,7 @@
           <h3>Criatura</h3>
           <p class="nota">Id: <code>${escapar(this.criatura ? this.criatura.id : "—")}</code></p>
           <div class="botones" style="margin-top:8px">
-            <button class="boton ${confirmando ? "confirmar" : "peligro"}" id="boton-nueva">${confirmando ? "¿Seguro? Pulsa otra vez" : "🌱 Criar una criatura nueva"}</button>
+            <button class="boton ${confirmando ? "confirmar" : "peligro"}" id="boton-nueva">${confirmando ? "¿Seguro? Pulsa otra vez" : `${icono("sprout")} Criar una criatura nueva`}</button>
           </div>
           <p class="nota">La criatura actual no se borra: su archivo queda en <code>data/creatures/</code>.</p>
         </section>`;

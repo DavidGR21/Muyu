@@ -91,7 +91,7 @@ VENTANA_ASOCIACION_POSTERIOR_S = 5.0  # señal y luego palabra (condicionamiento
 PESO_ASOCIACION_POSTERIOR = 0.4       # …que es mucho más débil
 VENTANA_RESPUESTA_S = 120.0         # tiempo en que espera respuesta a su pregunta
 VENTANA_CORRECCION_S = 25.0         # un regaño o un gesto así de rápido corrige lo que aceptó
-VENTANA_GESTO_S = 20.0              # las palabras así de cerca de un 👍/👎 aprenden si significan sí o no
+VENTANA_GESTO_S = 20.0              # las palabras así de cerca de un gesto de asentir o negar aprenden si significan sí o no
 AUSENCIA_SALUDO_S = 30.0            # ausencia mínima para saludar al volver
 
 # ── Pensamiento propio (thoughts.py) ──────────────────────────────────────
