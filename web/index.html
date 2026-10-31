@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fffdf8">
+  <title>Muyu</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="barra">
+    <div class="marca">
+      <span class="logo">🌱</span>
+      <strong id="nombre">Muyu</strong>
+      <span id="edad" class="apagado"></span>
+    </div>
+    <div id="etapa" class="etapa-chip">Etapa 0 · Balbuceo</div>
+    <div class="barra-derecha">
+      <span id="conexion" class="conexion">conectando…</span>
+      <button id="boton-voz" class="boton-icono" title="Activar o silenciar su voz">🔊</button>
+      <button id="boton-panel" class="boton-icono solo-movil" title="Ver su cerebro">🧠</button>
+    </div>
+  </header>
+
+  <main class="contenido">
+    <section class="habitacion">
+      <div class="escena">
+        <canvas id="lienzo" aria-label="La habitación de Muyu"></canvas>
+        <div id="burbuja" class="burbuja oculta" aria-live="polite"></div>
+        <div class="estado-rapido">
+          <span id="emocion-actual" class="emocion-chip">neutral</span>
+          <span class="mini" title="Energía">⚡<span class="mini-barra"><span id="mini-energia"></span></span></span>
+          <span class="mini" title="Saciedad">🍎<span class="mini-barra"><span id="mini-saciedad"></span></span></span>
+          <span class="mini" title="Compañía">🤝<span class="mini-barra"><span id="mini-compania"></span></span></span>
+          <span class="mini" title="Seguridad">🛡️<span class="mini-barra"><span id="mini-seguridad"></span></span></span>
+        </div>
+        <div id="esperando" class="esperando oculta">Espera tu respuesta…</div>
+        <div id="sonido-aviso" class="sonido-aviso oculta">Toca la habitación para oír su voz</div>
+      </div>
+      <p id="actividad" class="actividad">…</p>
+
+      <div class="acciones">
+        <button data-accion="acariciar" title="Señal primaria positiva (también puedes tocarla)">🤲 <span>Acariciar</span></button>
+        <button data-accion="alimentar" title="Le das de comer (también puedes tocar su plato)">🍎 <span>Alimentar</span></button>
+        <button data-accion="jugar" title="Le lanzas la pelota (también puedes tocarla)">⚽ <span>Jugar</span></button>
+        <button data-accion="regañar" class="peligro" title="Señal primaria negativa">✋ <span>Regañar</span></button>
+        <button id="boton-dormir" data-accion="dormir" title="Acostarla o despertarla (también puedes tocar la cama)">🌙 <span>Dormir</span></button>
+        <span class="separador"></span>
+        <button data-accion="asentir" class="gesto-si" title="Le dices con un gesto que lo que acaba de decir o preguntar está bien">👍 <span>Asentir</span></button>
+        <button data-accion="negar" class="gesto-no" title="Le dices con un gesto que lo que acaba de decir o preguntar está mal">👎 <span>Negar</span></button>
+      </div>
+      <p class="ayuda">👍/👎 corrigen lo último que dijo o preguntó. Escribe «sí» o «no» junto al gesto y aprenderá qué significan esas palabras.</p>
+
+      <div id="chat" class="chat"></div>
+
+      <form id="formulario" class="formulario" autocomplete="off">
+        <input id="entrada" maxlength="500" placeholder="Háblale a Muyu… (prueba «hola Muyu»)">
+        <button type="submit">Enviar</button>
+      </form>
+    </section>
+
+    <aside id="panel" class="panel">
+      <nav class="pestanas" role="tablist">
+        <button class="activa" data-vista="emocion">Emoción</button>
+        <button data-vista="cuerpo">Cuerpo</button>
+        <button data-vista="lexico">Léxico</button>
+        <button data-vista="grafo">Grafo</button>
+        <button data-vista="pensamientos">Pensamientos</button>
+        <button data-vista="hipotesis">Hipótesis</button>
+        <button data-vista="tiempo">Tiempo</button>
+      </nav>
+      <div class="vista activa" id="vista-emocion"></div>
+      <div class="vista" id="vista-cuerpo"></div>
+      <div class="vista" id="vista-lexico"></div>
+      <div class="vista" id="vista-grafo">
+        <div class="grafo-contenedor"><canvas id="lienzo-grafo"></canvas></div>
+        <div class="leyenda">
+          <span><i class="punto activo"></i>activo</span>
+          <span><i class="punto tenue"></i>tenue</span>
+          <span><i class="punto latente"></i>latente</span>
+          <span><i class="linea ensenado"></i>enseñado</span>
+          <span><i class="linea deducido"></i>deducido</span>
+          <span><i class="linea hipotesis"></i>hipótesis</span>
+          <span><i class="linea forma"></i>parecido de forma</span>
+        </div>
+        <p class="nota">Arrastra los nodos para ordenarlos. El brillo es la activación propagada; el borde, la valencia.</p>
+      </div>
+      <div class="vista" id="vista-pensamientos"></div>
+      <div class="vista" id="vista-hipotesis"></div>
+      <div class="vista" id="vista-tiempo"></div>
+    </aside>
+  </main>
+
+  <script src="creature.js"></script>
+  <script src="room.js"></script>
+  <script src="voice.js"></script>
+  <script src="brain-panel.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
