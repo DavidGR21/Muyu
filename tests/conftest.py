@@ -1,4 +1,9 @@
+import os
+
 import pytest
+
+# Las pruebas no cargan (ni descargan) Whisper: el texto hablado se simula.
+os.environ.setdefault("MUYU_SIN_OIDO", "1")
 
 from server.brain.creature import Muyu
 from server.brain.perception import percibir_texto

@@ -2,6 +2,7 @@
  * el id de su criatura para retomarla al volver. */
 import { Criatura } from "./creature.js";
 import { Habitacion } from "./room.js";
+import { Escucha } from "./mic.js";
 
 const $ = (selector) => document.querySelector(selector);
 const icono = window.icono;
@@ -9,7 +10,7 @@ const CLAVE_ID = "muyu.id";
 const ICONO_ACTIVIDAD = {
   quieta: "sprout", explorar: "search", jugar: "volleyball", mirar_ventana: "eye", descansar: "sofa",
   pedir_comida: "utensils", buscarte: "users", esconderse: "box", aburrirse: "hourglass", ir_a_dormir: "bed",
-  atenderte: "message-square-text", comer: "apple", dormir: "moon",
+  atenderte: "message-square-text", acercarse: "hand-heart", comer: "apple", dormir: "moon",
 };
 
 // Iconos declarados en el HTML con data-icono.
@@ -35,6 +36,8 @@ let reintentos = 0;
 let nombre = "Muyu";
 let despierta = true;
 let temporizadorBurbuja = null;
+let hablando = 0;                 // cuántas frases suyas están sonando
+let esperandoRespuesta = false;   // le hablaste y todavía no contesta
 
 // ── Conexión ────────────────────────────────────────────────────────
 function conectar() {
@@ -73,6 +76,7 @@ function recibir(mensaje) {
       panel.identidad(mensaje.datos);
       break;
     case "habla": hablar(mensaje); break;
+    case "oido": mostrarLoOido(mensaje.datos); break;
     case "actividad": mostrarActividad(mensaje.datos); break;
     case "pensamiento": panel.pensamiento(mensaje.datos); break;
     case "aviso": agregarAlChat("aviso", mensaje.texto); break;
@@ -89,9 +93,20 @@ function hablar(mensaje) {
   if (mensaje.emocion) criatura.estado({ emocion: mensaje.emocion });
   criatura.gesto(mensaje.gesto, ahora);
   if (mensaje.gesto === "carino") voz.sonido("risa");
-  const duracionVoz = voz.decir(mensaje.texto, mensaje.emocion, mensaje.pregunta);
   if (mensaje.intencion !== "dormida") {
-    criatura.hablar(duracionVoz ? duracionVoz * 1000 : 300 + mensaje.texto.length * 60, ahora);
+    // Mientras habla no escucha: así no se oye a sí misma.
+    const conPalabras = (mensaje.palabras || []).length > 0;
+    hablando += 1;
+    escucha.pausar();
+    criatura.hablar(500 + mensaje.texto.length * 75, ahora);
+    voz.hablar(mensaje.texto, mensaje.emocion, mensaje.pregunta, conPalabras).then(() => {
+      hablando -= 1;
+      if (["respuesta", "reaccion", "saludo"].includes(mensaje.origen)) esperandoRespuesta = false;
+      reanudarEscucha();
+    });
+  } else if (["respuesta", "reaccion"].includes(mensaje.origen)) {
+    esperandoRespuesta = false;
+    reanudarEscucha();
   }
   const burbuja = $("#burbuja");
   burbuja.textContent = mensaje.texto;
@@ -225,6 +240,106 @@ $("#formulario").addEventListener("submit", (evento) => {
   enviar({ tipo: "mensaje", texto });
   entrada.value = "";
 });
+
+// ── Micrófono siempre atento: detecta solo cuándo le hablas ─────────
+const ETIQUETAS_ESCUCHA = {
+  escuchando: "Te escucha", oyendo: "Te está oyendo…", enviando: "Pensando lo que oyó…",
+  pausada: "No escucha mientras habla", apagada: "Micrófono apagado",
+};
+const botonMic = $("#boton-mic");
+const escucha = new Escucha({
+  alFrase: (audio) => {
+    esperandoRespuesta = true;
+    escucha.pausar(15);                           // hasta que conteste (o 15 s como máximo)
+    enviar({ tipo: "voz", audio });
+  },
+  alEstado: (estado) => pintarEscucha(estado),
+  alNivel: (nivel) => { $("#nivel-mic").style.width = `${Math.round(nivel * 100)}%`; },
+});
+
+function reanudarEscucha() {
+  if (hablando <= 0 && !esperandoRespuesta) escucha.reanudar();
+}
+
+function pintarEscucha(estado = escucha.activa ? "escuchando" : "apagada") {
+  const encendida = escucha.activa;
+  botonMic.classList.toggle("escuchando", encendida && estado === "escuchando");
+  botonMic.classList.toggle("grabando", encendida && estado === "oyendo");
+  botonMic.classList.toggle("procesando", encendida && (estado === "enviando" || estado === "pausada"));
+  botonMic.innerHTML = icono(encendida ? "mic" : "mic-off");
+  botonMic.title = encendida ? `${ETIQUETAS_ESCUCHA[estado] || "Te escucha"} · toca para apagar el micrófono`
+    : "Micrófono apagado · toca para que te escuche siempre";
+  const indicador = $("#grabacion");
+  indicador.classList.toggle("oculta", !encendida || !["oyendo", "enviando"].includes(estado));
+  $("#estado-mic").textContent = ETIQUETAS_ESCUCHA[estado] || "";
+  indicador.dataset.estado = estado;
+}
+
+async function encenderEscucha() {
+  try {
+    voz.desbloquear();
+    await escucha.iniciar();
+    localStorage.setItem("muyu.escucha", "si");
+  } catch (error) {
+    agregarAlChat("aviso", `No se pudo usar el micrófono: ${error.message}`);
+    localStorage.setItem("muyu.escucha", "no");
+  }
+  pintarEscucha();
+}
+
+if (!escucha.disponible) {
+  botonMic.disabled = true;
+  botonMic.innerHTML = icono("mic-off");
+  botonMic.title = "El micrófono necesita HTTPS (o abrir la página como localhost en esta PC). Ver README, sección 8.4.";
+} else {
+  botonMic.addEventListener("click", async () => {
+    if (escucha.activa) {
+      await escucha.detener();
+      localStorage.setItem("muyu.escucha", "no");
+      pintarEscucha();
+    } else {
+      encenderEscucha();
+    }
+  });
+  // Siempre atento: se enciende con tu primer toque en la página (el navegador lo exige).
+  if (localStorage.getItem("muyu.escucha") !== "no") {
+    const alPrimerToque = () => {
+      document.removeEventListener("pointerdown", alPrimerToque);
+      document.removeEventListener("keydown", alPrimerToque);
+      if (!escucha.activa) encenderEscucha();
+    };
+    document.addEventListener("pointerdown", alPrimerToque);
+    document.addEventListener("keydown", alPrimerToque);
+  }
+  pintarEscucha();
+}
+
+function mostrarLoOido(datos) {
+  if (!datos.prosodia || !datos.prosodia.con_voz) {
+    // Era ruido, no una voz: no contesta, así que vuelve a escuchar enseguida.
+    esperandoRespuesta = false;
+    reanudarEscucha();
+    return;
+  }
+  const elemento = document.createElement("div");
+  elemento.className = "mensaje tu";
+  elemento.append(document.createTextNode(datos.texto || "(no entendió palabras)"));
+  const detalle = document.createElement("span");
+  detalle.className = "voz";
+  const prosodia = datos.prosodia || {};
+  const partes = [...(datos.percepcion || [])];
+  if (prosodia.con_voz) {
+    partes.push(`${Math.round(prosodia.volumen_db)} dB`);
+    if (prosodia.tono_hz) partes.push(`${Math.round(prosodia.tono_hz)} Hz`);
+  } else {
+    partes.push("no oyó ninguna voz");
+  }
+  detalle.innerHTML = icono("mic");
+  detalle.append(document.createTextNode(partes.join(" · ")));
+  elemento.append(detalle);
+  $("#chat").append(elemento);
+  $("#chat").scrollTop = $("#chat").scrollHeight;
+}
 
 // ── Voz: los navegadores solo dejan sonar después de un toque ───────
 const botonVoz = $("#boton-voz");
