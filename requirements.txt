@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+numpy
+pytest
+httpx  # lo usa el TestClient de FastAPI en las pruebas del servidor
