@@ -278,7 +278,7 @@ export class Criatura {
 
   _mirarA(nombre, camara) {
     const objeto = this.despierta ? this.actividad.objeto : "cama";
-    if (["atenderte", "buscarte", "pedir_comida", "quieta", "aburrirse", "esconderse", "dormir"].includes(nombre) || !objeto) {
+    if (["atenderte", "acercarse", "buscarte", "pedir_comida", "quieta", "aburrirse", "esconderse", "dormir"].includes(nombre) || !objeto) {
       return Math.atan2(camara.position.x - this.x, camara.position.z - this.z);
     }
     const centro = this.habitacion.centroDe(objeto);
@@ -310,7 +310,7 @@ export class Criatura {
 
     if (!caminando) {
       switch (nombre) {
-        case "atenderte": case "buscarte":
+        case "atenderte": case "acercarse": case "buscarte":
           pose.mira = { x: 0, y: 0.3 };
           if (nombre === "buscarte" && Math.sin(t * 3) > 0.7) pose.dy += 0.08;
           break;
