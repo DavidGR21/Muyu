@@ -1,7 +1,10 @@
-/* Voz de criatura (Web Audio API): canturrea lo que dice, sílaba por sílaba.
- * No pronuncia palabras: el tono, el ritmo y el volumen salen de su emoción, así
- * su voz dice lo mismo que su cuerpo. Cada criatura nace con su propio timbre.
- * Los navegadores solo permiten sonar después de que tocas la página. */
+/* Voz de Muyu.
+ * - Cuando dice palabras, las pronuncia con una voz del sistema instalada en la PC
+ *   (solo voces locales: nada sale a internet), aguda y con el tono y la velocidad
+ *   de su emoción.
+ * - Cuando balbucea, canturrea sílaba por sílaba con un sintetizador propio (Web Audio).
+ * Así su voz dice lo mismo que su cuerpo. Cada criatura nace con su propio timbre.
+ * Los navegadores solo dejan sonar después de que tocas la página. */
 (function () {
   "use strict";
 
@@ -36,6 +39,7 @@
     constructor() {
       this.ctx = null;
       this.activa = localStorage.getItem("muyu.voz") !== "no";
+      if ("speechSynthesis" in window) speechSynthesis.getVoices();   // las voces cargan en segundo plano
       this.tono = 400;
       this.brillo = 0.6;
       this.ritmo = 1;
@@ -69,13 +73,62 @@
     alternar() {
       this.activa = !this.activa;
       localStorage.setItem("muyu.voz", this.activa ? "si" : "no");
-      if (this.activa) this.desbloquear();
-      else if (this.ctx) this.ctx.suspend();
+      if (this.activa) {
+        this.desbloquear();
+      } else {
+        if (this.ctx) this.ctx.suspend();
+        if ("speechSynthesis" in window) speechSynthesis.cancel();
+      }
       return this.activa;
     }
 
     _listo() {
       return this.activa && this.ctx && this.ctx.state === "running";
+    }
+
+    /** Habla y devuelve una promesa que se cumple cuando termina de sonar (en segundos).
+     *  Con palabras usa una voz local del sistema; sin palabras (o sin voz local), canturrea. */
+    hablar(texto, emocion = {}, pregunta = false, conPalabras = false) {
+      if (!this.activa || !texto) return Promise.resolve(0);
+      const vozLocal = conPalabras ? this.vozLocal() : null;
+      if (vozLocal) return this._pronunciar(texto, emocion, vozLocal);
+      const segundos = this.decir(texto, emocion, pregunta);
+      return new Promise((resolver) => setTimeout(() => resolver(segundos), segundos * 1000));
+    }
+
+    /** Una voz en español instalada en el sistema (localService): nunca una voz en línea. */
+    vozLocal() {
+      if (!("speechSynthesis" in window)) return null;
+      const voces = speechSynthesis.getVoices()
+        .filter((v) => v.localService && v.lang && v.lang.toLowerCase().startsWith("es"));
+      return voces.find((v) => /helena|sabina|laura|elvira|dalia/i.test(v.name)) || voces[0] || null;
+    }
+
+    _pronunciar(texto, emocion, vozLocal) {
+      return new Promise((resolver) => {
+        const p = emocion.p || 0, a = emocion.a || 0;
+        const triste = p < -0.25 && a < 0.1;
+        // Las pausas «…» se leen como comas; la tartamudez «F-fuego» como «F, fuego».
+        const limpio = texto.replace(/…/g, ", ").replace(/(\p{L})-(?=\p{L})/gu, "$1, ").replace(/[¡¿]/g, "");
+        const frase = new SpeechSynthesisUtterance(limpio);
+        frase.voice = vozLocal;
+        frase.lang = vozLocal.lang;
+        frase.pitch = Math.max(0.6, Math.min(2, 1.5 + 0.3 * p + 0.15 * a + (this.tono - 400) / 500));
+        frase.rate = Math.max(0.6, Math.min(1.5, (0.95 + 0.25 * a - (triste ? 0.15 : 0)) * this.ritmo));
+        frase.volume = triste ? 0.75 : 1;
+        const inicio = performance.now();
+        let terminado = false;
+        const terminar = () => {
+          if (terminado) return;
+          terminado = true;
+          resolver((performance.now() - inicio) / 1000);
+        };
+        frase.onend = terminar;
+        frase.onerror = terminar;
+        setTimeout(terminar, 2000 + limpio.length * 130);      // por si el navegador no avisa
+        speechSynthesis.cancel();
+        speechSynthesis.speak(frase);
+      });
     }
 
     /** Canturrea un texto con la emoción del instante en que lo dijo. */
