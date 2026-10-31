@@ -1,331 +1,512 @@
-/* La habitación de Muyu en pixel art (256 × 160 píxeles, escalada sin suavizar).
+/* La habitación de Muyu en 3D (three.js, archivos locales: sin servicios externos).
  * La ventana muestra su hora del día; de noche la lámpara ilumina el cuarto.
  * Los objetos tienen el mismo nombre que usa el servidor para sus actividades. */
-(function () {
-  "use strict";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/OrbitControls.js";
 
-  const W = 256;
-  const H = 160;
-  const PISO = 100;
-  // A dónde camina Muyu para cada objeto (sus pies).
-  const PUNTOS = {
-    cama: { x: 36, y: 121 },
-    plato: { x: 102, y: 147 },
-    cojin: { x: 128, y: 130 },
-    caja: { x: 219, y: 127 },
-    ventana: { x: 180, y: 121 },
-    planta: { x: 226, y: 122 },
-    frente: { x: 128, y: 155 },
-  };
-  const ZONAS = {     // para tocar objetos
-    plato: { x: 86, y: 141, w: 16, h: 8 },
-    cama: { x: 6, y: 100, w: 54, h: 30 },
-  };
+const ANCHO = 8;          // x: de -4 a 4
+const FONDO = 6;          // z: de -3 a 3
+// A dónde camina Muyu para cada objeto (sobre el piso).
+const PUNTOS = {
+  cama: { x: -2.75, z: -1.95 },
+  plato: { x: -0.55, z: 1.5 },
+  cojin: { x: 0.7, z: -0.5 },
+  caja: { x: 2.8, z: -2.05 },
+  ventana: { x: 0.9, z: -2.2 },
+  planta: { x: 2.55, z: -2.35 },
+  frente: { x: 0.4, z: 2.2 },
+};
 
-  class Habitacion {
-    constructor(lienzo, criatura, { onTocar } = {}) {
-      this.lienzo = lienzo;
-      lienzo.width = W;
-      lienzo.height = H;
-      this.ctx = lienzo.getContext("2d");
-      this.ctx.imageSmoothingEnabled = false;
-      this.criatura = criatura;
-      criatura.habitacion = this;
-      this.onTocar = onTocar;
-      this.alDibujar = null;
-      this.hora = 12;
-      this.comida = 0;                         // segundos de comida que quedan en el plato
-      this.pelota = { x: 158, y: 146, vx: 0, giro: 0 };
-      this.sombra = document.createElement("canvas");
-      this.sombra.width = W;
-      this.sombra.height = H;
-      lienzo.addEventListener("click", (e) => this._tocar(e));
-      lienzo.addEventListener("pointermove", (e) => {
-        lienzo.style.cursor = this._objetoEn(this._coordenadas(e)) ? "pointer" : "default";
-      });
-      this._ultimo = performance.now();
-      requestAnimationFrame((t) => this._cuadro(t));
+function madera(colorBase, vetas) {
+  const lienzo = document.createElement("canvas");
+  lienzo.width = lienzo.height = 256;
+  const ctx = lienzo.getContext("2d");
+  ctx.fillStyle = colorBase;
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = i % 2 ? "rgba(0,0,0,0.035)" : "rgba(255,255,255,0.03)";
+    ctx.fillRect(0, i * 32, 256, 32);
+    ctx.fillStyle = vetas;
+    ctx.fillRect(0, i * 32, 256, 1.5);
+    ctx.fillRect(((i * 97) % 200) + 20, i * 32, 1.5, 32);
+  }
+  const textura = new THREE.CanvasTexture(lienzo);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  textura.wrapS = textura.wrapT = THREE.RepeatWrapping;
+  return textura;
+}
+
+function rayas(color, linea) {
+  const lienzo = document.createElement("canvas");
+  lienzo.width = lienzo.height = 128;
+  const ctx = lienzo.getContext("2d");
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = linea;
+  for (let x = 0; x < 128; x += 32) ctx.fillRect(x, 0, 10, 128);
+  const textura = new THREE.CanvasTexture(lienzo);
+  textura.colorSpace = THREE.SRGBColorSpace;
+  textura.wrapS = textura.wrapT = THREE.RepeatWrapping;
+  return textura;
+}
+
+export class Habitacion {
+  constructor(contenedor, criatura, { onTocar } = {}) {
+    this.contenedor = contenedor;
+    this.criatura = criatura;
+    criatura.habitacion = this;
+    this.onTocar = onTocar;
+    this.alDibujar = null;
+    this.hora = 12;
+    this.comida = 0;
+    this._momento = null;
+
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    contenedor.prepend(this.renderer.domElement);
+
+    this.escena = new THREE.Scene();
+    this.escena.background = new THREE.Color(0xe9e2d6);
+    this.camara = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    this.camara.position.set(4.6, 4.4, 7.8);
+    this.controles = new OrbitControls(this.camara, this.renderer.domElement);
+    this.controles.target.set(0, 0.7, -0.3);
+    this.controles.enablePan = false;
+    this.controles.enableDamping = true;
+    this.controles.minDistance = 5;
+    this.controles.maxDistance = 12;
+    this.controles.minPolarAngle = 0.55;
+    this.controles.maxPolarAngle = 1.35;
+    this.controles.minAzimuthAngle = -0.35;
+    this.controles.maxAzimuthAngle = 1.1;
+
+    this._luces();
+    this._cuarto();
+    this._muebles();
+    this.escena.add(criatura.grupo);
+
+    this.raycaster = new THREE.Raycaster();
+    this._tocables = [];
+    for (const objeto of [this.pelota, this.plato, this.cama, criatura.grupo]) this._tocables.push(objeto);
+    const lienzo = this.renderer.domElement;
+    let inicio = null;
+    lienzo.addEventListener("pointerdown", (e) => { inicio = { x: e.clientX, y: e.clientY }; });
+    lienzo.addEventListener("pointerup", (e) => {
+      if (inicio && Math.hypot(e.clientX - inicio.x, e.clientY - inicio.y) < 6) this._tocar(e);
+      inicio = null;
+    });
+    lienzo.addEventListener("pointermove", (e) => { lienzo.style.cursor = this._objetoEn(e) ? "pointer" : "grab"; });
+
+    new ResizeObserver(() => this._ajustar()).observe(contenedor);
+    this._ajustar();
+    this._reloj = new THREE.Clock();
+    this.renderer.setAnimationLoop(() => this._cuadro());
+  }
+
+  // ── Construcción ──────────────────────────────────────────────────
+  _luces() {
+    this.hemisferio = new THREE.HemisphereLight(0xfff3e0, 0x8a6a4a, 1.2);
+    this.escena.add(this.hemisferio);
+    this.sol = new THREE.DirectionalLight(0xfff1d6, 2.2);
+    this.sol.position.set(1.5, 6, 4);
+    this.sol.castShadow = true;
+    this.sol.shadow.mapSize.set(2048, 2048);
+    Object.assign(this.sol.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5 });
+    this.sol.shadow.radius = 4;
+    this.sol.shadow.bias = -0.0005;
+    this.escena.add(this.sol);
+    this.lampara = new THREE.PointLight(0xffc977, 0, 7, 1.6);
+    this.lampara.position.set(-2.75, 2.1, -2.6);
+    this.lampara.castShadow = true;
+    this.escena.add(this.lampara);
+    this.luzLuna = new THREE.SpotLight(0x9fb4ff, 0, 9, 0.6, 0.6);
+    this.luzLuna.position.set(0.9, 2.4, -3.4);
+    this.luzLuna.target.position.set(0.9, 0, 0);
+    this.escena.add(this.luzLuna, this.luzLuna.target);
+  }
+
+  _cuarto() {
+    const piso = madera("#c99d6b", "rgba(80,50,20,0.35)");
+    piso.repeat.set(2, 2);
+    const suelo = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, FONDO),
+      new THREE.MeshStandardMaterial({ map: piso, roughness: 0.75 }));
+    suelo.rotation.x = -Math.PI / 2;
+    suelo.receiveShadow = true;
+    this.escena.add(suelo);
+
+    const papel = rayas("#efdcc0", "#e8d1ae");
+    papel.repeat.set(4, 1.5);
+    const pared = new THREE.MeshStandardMaterial({ map: papel, roughness: 0.9 });
+    const fondo = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, 3.2), pared);
+    fondo.position.set(0, 1.6, -FONDO / 2);
+    fondo.receiveShadow = true;
+    const izquierda = new THREE.Mesh(new THREE.PlaneGeometry(FONDO, 3.2), pared);
+    izquierda.position.set(-ANCHO / 2, 1.6, 0);
+    izquierda.rotation.y = Math.PI / 2;
+    izquierda.receiveShadow = true;
+    this.escena.add(fondo, izquierda);
+
+    const zocalo = new THREE.MeshStandardMaterial({ color: 0xb8915f, roughness: 0.6 });
+    const z1 = new THREE.Mesh(new THREE.BoxGeometry(ANCHO, 0.16, 0.05), zocalo);
+    z1.position.set(0, 0.08, -FONDO / 2 + 0.025);
+    const z2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, FONDO), zocalo);
+    z2.position.set(-ANCHO / 2 + 0.025, 0.08, 0);
+    this.escena.add(z1, z2);
+
+    // Ventana con cielo dibujado según su hora.
+    this.lienzoCielo = document.createElement("canvas");
+    this.lienzoCielo.width = 256;
+    this.lienzoCielo.height = 192;
+    this.texturaCielo = new THREE.CanvasTexture(this.lienzoCielo);
+    this.texturaCielo.colorSpace = THREE.SRGBColorSpace;
+    const cielo = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.25), new THREE.MeshBasicMaterial({ map: this.texturaCielo }));
+    cielo.position.set(0.9, 1.95, -FONDO / 2 + 0.01);
+    this.escena.add(cielo);
+    const marco = new THREE.MeshStandardMaterial({ color: 0x8b6a47, roughness: 0.6 });
+    for (const [w, h, x, y] of [[1.86, 0.08, 0.9, 2.6], [1.86, 0.08, 0.9, 1.3], [0.08, 1.38, 0.0, 1.95],
+      [0.08, 1.38, 1.8, 1.95], [0.05, 1.25, 0.9, 1.95], [1.7, 0.05, 0.9, 1.95]]) {
+      const pieza = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.07), marco);
+      pieza.position.set(x, y, -FONDO / 2 + 0.04);
+      this.escena.add(pieza);
     }
+    const alfeizar = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.06, 0.22), marco);
+    alfeizar.position.set(0.9, 1.25, -FONDO / 2 + 0.11);
+    alfeizar.castShadow = true;
+    this.escena.add(alfeizar);
 
-    punto(objeto, criatura) {
-      if (!objeto) return null;
-      if (objeto === "pelota") {
-        return { x: this.pelota.x + (criatura.x < this.pelota.x ? -10 : 10), y: this.pelota.y };
-      }
-      return PUNTOS[objeto] || null;
+    // Cuadro en la pared izquierda con un sol pintado.
+    const lienzoCuadro = document.createElement("canvas");
+    lienzoCuadro.width = 128;
+    lienzoCuadro.height = 96;
+    const c = lienzoCuadro.getContext("2d");
+    c.fillStyle = "#fbf3df"; c.fillRect(0, 0, 128, 96);
+    c.fillStyle = "#9ccf7a"; c.fillRect(0, 68, 128, 28);
+    c.fillStyle = "#f2b632"; c.beginPath(); c.arc(64, 40, 16, 0, Math.PI * 2); c.fill();
+    const texturaCuadro = new THREE.CanvasTexture(lienzoCuadro);
+    texturaCuadro.colorSpace = THREE.SRGBColorSpace;
+    // La cara +x de la caja (índice 0) mira hacia el cuarto: ahí va la pintura.
+    const lienzoPintado = new THREE.MeshStandardMaterial({ map: texturaCuadro });
+    const cuadro = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.62, 0.82),
+      [lienzoPintado, marco, marco, marco, marco, marco]);
+    cuadro.position.set(-ANCHO / 2 + 0.04, 1.9, 0.6);
+    this.escena.add(cuadro);
+  }
+
+  _caja(w, h, d, color, x, y, z, opciones = {}) {
+    const malla = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshStandardMaterial({ color, roughness: opciones.rugosidad ?? 0.7 }));
+    malla.position.set(x, y, z);
+    malla.castShadow = true;
+    malla.receiveShadow = true;
+    return malla;
+  }
+
+  _muebles() {
+    // Camita redonda de mascota: base acolchada, borde mullido y una mantita doblada.
+    this.cama = new THREE.Group();
+    const tela = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.95 });
+    const fondoCama = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.86, 0.1, 40), tela(0x6e86b8));
+    fondoCama.position.y = 0.05;
+    // Borde mullido con una abertura al frente (hacia la cámara), como las camitas de perro.
+    const abertura = THREE.MathUtils.degToRad(80);
+    const aro = new THREE.Group();
+    const tubo = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.14, 16, 48, Math.PI * 2 - abertura), tela(0x7f98cc));
+    tubo.rotation.x = Math.PI / 2;
+    tubo.castShadow = tubo.receiveShadow = true;
+    aro.add(tubo);
+    for (const angulo of [0, Math.PI * 2 - abertura]) {
+      const punta = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 12), tela(0x7f98cc));
+      punta.position.set(Math.cos(angulo) * 0.68, 0, Math.sin(angulo) * 0.68);
+      punta.castShadow = true;
+      aro.add(punta);
     }
-
-    lanzarPelota() {
-      this.pelota.vx = (this.pelota.x > 128 ? -1 : 1) * (70 + Math.random() * 40);
+    // El hueco queda centrado en el ángulo -40° del aro; se gira para que mire a la cámara (53° en el piso).
+    aro.rotation.y = -THREE.MathUtils.degToRad(93);
+    aro.position.y = 0.16;
+    const colchon = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.58, 0.1, 40), tela(0xf2e6d4));
+    colchon.position.y = 0.12;
+    const costura = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.012, 6, 48), tela(0xd9c8ae));
+    costura.rotation.x = Math.PI / 2;
+    costura.position.y = 0.175;
+    const mantita = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.32), tela(0xe7a6a1));
+    mantita.position.set(-0.3, 0.32, -0.6);
+    mantita.rotation.set(0.35, 0.6, 0.12);
+    for (const pieza of [fondoCama, colchon, mantita]) {
+      pieza.castShadow = true;
+      pieza.receiveShadow = true;
     }
+    this.cama.add(fondoCama, aro, colchon, costura, mantita);
+    this.cama.position.set(-2.75, 0, -1.95);
+    this.cama.traverse((m) => { m.userData.objeto = "cama"; });
+    this.escena.add(this.cama);
 
-    servirComida() {
-      this.comida = 7;
+    // Lámpara de pared sobre su camita.
+    const pantalla = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.24, 0.24, 20, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xe8c170, side: THREE.DoubleSide, emissive: 0x000000 }));
+    pantalla.position.set(-2.75, 2.2, -2.8);
+    this.pantalla = pantalla;
+    this.escena.add(pantalla, this._caja(0.04, 0.3, 0.2, 0x8b6a47, -2.75, 2.0, -2.93));
+
+    // Alfombra y cojín.
+    const alfombra = new THREE.Mesh(new THREE.CircleGeometry(1.15, 40),
+      new THREE.MeshStandardMaterial({ color: 0xdcb995, roughness: 1 }));
+    alfombra.rotation.x = -Math.PI / 2;
+    alfombra.scale.set(1.3, 0.85, 1);
+    alfombra.position.set(0.7, 0.006, -0.5);
+    alfombra.receiveShadow = true;
+    const borde = new THREE.Mesh(new THREE.RingGeometry(1.08, 1.15, 40),
+      new THREE.MeshStandardMaterial({ color: 0xc58f6b, roughness: 1 }));
+    borde.rotation.x = -Math.PI / 2;
+    borde.scale.set(1.3, 0.85, 1);
+    borde.position.set(0.7, 0.008, -0.5);
+    const cojin = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.55, 0.16, 28),
+      new THREE.MeshStandardMaterial({ color: 0xc97c9a, roughness: 0.85 }));
+    cojin.position.set(0.7, 0.08, -0.5);
+    cojin.castShadow = cojin.receiveShadow = true;
+    this.escena.add(alfombra, borde, cojin);
+
+    // Caja de cartón (su escondite).
+    const caja = new THREE.Group();
+    caja.add(this._caja(0.95, 0.7, 0.8, 0xc89b5e, 0, 0.35, 0));
+    const solapa1 = this._caja(0.95, 0.03, 0.4, 0xd7ad72, 0, 0.72, 0.55);
+    solapa1.rotation.x = -0.6;
+    const solapa2 = this._caja(0.95, 0.03, 0.4, 0xd7ad72, 0, 0.72, -0.55);
+    solapa2.rotation.x = 0.6;
+    caja.add(solapa1, solapa2, this._caja(0.97, 0.12, 0.82, 0xe2c08a, 0, 0.45, 0));
+    caja.position.set(2.75, 0, -1.25);
+    this.escena.add(caja);
+
+    // Planta.
+    const planta = new THREE.Group();
+    const maceta = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.22, 0.5, 20),
+      new THREE.MeshStandardMaterial({ color: 0xb5653a, roughness: 0.8 }));
+    maceta.position.y = 0.25;
+    maceta.castShadow = true;
+    planta.add(maceta);
+    const verde = new THREE.MeshStandardMaterial({ color: 0x5ea343, roughness: 0.7 });
+    for (let i = 0; i < 7; i++) {
+      const hoja = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), verde);
+      const angulo = (i / 7) * Math.PI * 2;
+      hoja.scale.set(0.45, 1.6 + (i % 3) * 0.4, 0.25);
+      hoja.position.set(Math.cos(angulo) * 0.12, 0.75 + (i % 3) * 0.12, Math.sin(angulo) * 0.12);
+      hoja.rotation.set(Math.sin(angulo) * 0.4, 0, -Math.cos(angulo) * 0.4);
+      hoja.castShadow = true;
+      planta.add(hoja);
     }
+    planta.position.set(3.45, 0, -2.55);
+    this.escena.add(planta);
 
-    aPantalla(x, y) {
-      const caja = this.lienzo.getBoundingClientRect();
-      return { x: (x / W) * caja.width, y: (y / H) * caja.height };
+    // Plato y comida.
+    this.plato = new THREE.Group();
+    const cuenco = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.14, 24, 1, true),
+      new THREE.MeshStandardMaterial({ color: 0xd4574b, roughness: 0.4, side: THREE.DoubleSide }));
+    cuenco.position.y = 0.07;
+    cuenco.castShadow = true;
+    const base = new THREE.Mesh(new THREE.CircleGeometry(0.22, 24), new THREE.MeshStandardMaterial({ color: 0xa8423a }));
+    base.rotation.x = -Math.PI / 2;
+    base.position.y = 0.01;
+    this.comidaMalla = new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: 0xb07a45, roughness: 0.95 }));
+    this.comidaMalla.scale.y = 0.35;
+    this.comidaMalla.position.y = 0.07;
+    this.comidaMalla.visible = false;
+    this.plato.add(cuenco, base, this.comidaMalla);
+    this.plato.position.set(-1.15, 0, 1.5);
+    this.plato.traverse((m) => { m.userData.objeto = "plato"; });
+    this.escena.add(this.plato);
+
+    // Pelota con física simple.
+    const lienzo = document.createElement("canvas");
+    lienzo.width = 128;
+    lienzo.height = 64;
+    const ctx = lienzo.getContext("2d");
+    ctx.fillStyle = "#e04e4e"; ctx.fillRect(0, 0, 128, 64);
+    ctx.fillStyle = "#fff4f0"; ctx.fillRect(0, 28, 128, 8); ctx.fillRect(60, 0, 8, 64);
+    const texturaPelota = new THREE.CanvasTexture(lienzo);
+    texturaPelota.colorSpace = THREE.SRGBColorSpace;
+    this.pelota = new THREE.Mesh(new THREE.SphereGeometry(0.18, 24, 16),
+      new THREE.MeshStandardMaterial({ map: texturaPelota, roughness: 0.4 }));
+    this.pelota.position.set(1.6, 0.18, 1.0);
+    this.pelota.castShadow = true;
+    this.pelota.userData.objeto = "pelota";
+    this.pelota.userData.v = new THREE.Vector2(0, 0);
+    this.escena.add(this.pelota);
+  }
+
+  // ── Lo que usa la criatura ──────────────────────────────────────────
+  punto(objeto, criatura) {
+    if (!objeto) return null;
+    if (objeto === "pelota") {
+      const p = this.pelota.position;
+      const lado = criatura.x < p.x ? -0.42 : 0.42;
+      return { x: p.x + lado, z: p.z };
     }
+    return PUNTOS[objeto] || null;
+  }
 
-    // ── Bucle ─────────────────────────────────────────────────────────
-    _cuadro(ahora) {
-      const dt = Math.min(0.05, (ahora - this._ultimo) / 1000);
-      this._ultimo = ahora;
-      this._fisica(dt);
-      this.criatura.actualizar(dt, ahora);
-      this._jugarYComer(dt, ahora);
-      this._dibujar(ahora);
-      if (this.alDibujar) this.alDibujar(this.criatura.cabeza());
-      requestAnimationFrame((t) => this._cuadro(t));
+  centroDe(objeto) {
+    if (objeto === "pelota") return { x: this.pelota.position.x, z: this.pelota.position.z };
+    if (objeto === "cama") return { x: -2.75, z: -1.95, alto: 0.16 };
+    if (objeto === "plato") return { x: this.plato.position.x, z: this.plato.position.z };
+    if (objeto === "ventana") return { x: 0.9, z: -3 };
+    if (objeto === "caja") return { x: 2.75, z: -1.25 };
+    if (objeto === "planta") return { x: 3.45, z: -2.55 };
+    if (objeto === "cojin") return { x: 0.7, z: 0.5 };
+    return null;
+  }
+
+  lanzarPelota() {
+    const v = this.pelota.userData.v;
+    v.set((this.pelota.position.x > 0.5 ? -1 : 1) * (2.2 + Math.random()), (Math.random() - 0.5) * 1.8);
+  }
+
+  servirComida() {
+    this.comida = 7;
+  }
+
+  aPantalla(vector) {
+    const proyectado = vector.clone().project(this.camara);
+    const caja = this.renderer.domElement.getBoundingClientRect();
+    return { x: (proyectado.x + 1) / 2 * caja.width, y: (1 - proyectado.y) / 2 * caja.height, visible: proyectado.z < 1 };
+  }
+
+  // ── Bucle ───────────────────────────────────────────────────────────
+  _ajustar() {
+    const { clientWidth: ancho, clientHeight: alto } = this.contenedor;
+    if (!ancho || !alto) return;
+    this.renderer.setSize(ancho, alto);
+    this.camara.aspect = ancho / alto;
+    // En pantallas verticales (celular) abre el campo de visión para que se vea el cuarto entero.
+    this.camara.fov = this.camara.aspect < 1 ? 58 : this.camara.aspect < 1.4 ? 46 : 38;
+    this.camara.updateProjectionMatrix();
+  }
+
+  _cuadro() {
+    const dt = Math.min(0.05, this._reloj.getDelta());
+    const ahora = performance.now();
+    this._fisica(dt);
+    this.criatura.actualizar(dt, ahora, this.camara);
+    this._jugarYComer(dt, ahora);
+    this._diaYNoche(ahora);
+    this.controles.update();
+    this.renderer.render(this.escena, this.camara);
+    if (this.alDibujar) this.alDibujar(this.aPantalla(this.criatura.cabeza()));
+  }
+
+  _fisica(dt) {
+    const p = this.pelota.position;
+    const v = this.pelota.userData.v;
+    p.x += v.x * dt;
+    p.z += v.y * dt;
+    v.multiplyScalar(Math.pow(0.4, dt));
+    if (v.length() < 0.05) v.set(0, 0);
+    const limite = { x0: -1.6, x1: 3.6, z0: -1.4, z1: 2.6 };
+    if (p.x < limite.x0) { p.x = limite.x0; v.x = Math.abs(v.x) * 0.7; }
+    if (p.x > limite.x1) { p.x = limite.x1; v.x = -Math.abs(v.x) * 0.7; }
+    if (p.z < limite.z0) { p.z = limite.z0; v.y = Math.abs(v.y) * 0.7; }
+    if (p.z > limite.z1) { p.z = limite.z1; v.y = -Math.abs(v.y) * 0.7; }
+    this.pelota.rotation.z -= (v.x * dt) / 0.18;
+    this.pelota.rotation.x += (v.y * dt) / 0.18;
+  }
+
+  _jugarYComer(dt, ahora) {
+    const c = this.criatura;
+    this.comidaMalla.visible = this.comida > 0;
+    this.comidaMalla.scale.setScalar(Math.max(0.3, this.comida / 7));
+    this.comidaMalla.scale.y = 0.35 * Math.max(0.3, this.comida / 7);
+    if (!c.despierta) return;
+    const nombre = c.actividad.nombre;
+    const p = this.pelota.position;
+    if (nombre === "jugar" && Math.hypot(c.x - p.x, c.z - p.z) < 0.5 && this.pelota.userData.v.length() < 0.4) {
+      const dx = p.x - c.x || 0.1;
+      const dz = p.z - c.z;
+      const d = Math.hypot(dx, dz) || 1;
+      this.pelota.userData.v.set((dx / d) * (1.8 + Math.random()), (dz / d) * (1.8 + Math.random()) + (Math.random() - 0.5));
+      c.particula("nota", "#e0a32e", ahora);
     }
-
-    _fisica(dt) {
-      const pelota = this.pelota;
-      pelota.x += pelota.vx * dt;
-      pelota.vx *= Math.pow(0.35, dt);
-      if (Math.abs(pelota.vx) < 2) pelota.vx = 0;
-      if (pelota.x < 66) { pelota.x = 66; pelota.vx = Math.abs(pelota.vx) * 0.7; }
-      if (pelota.x > 196) { pelota.x = 196; pelota.vx = -Math.abs(pelota.vx) * 0.7; }
-      pelota.giro += pelota.vx * dt * 0.4;
-    }
-
-    _jugarYComer(dt, ahora) {
-      const c = this.criatura;
-      if (!c.despierta) return;
-      const nombre = c.actividad.nombre;
-      if (nombre === "jugar" && Math.abs(c.x - this.pelota.x) < 12 && Math.abs(c.y - this.pelota.y) < 6
-          && Math.abs(this.pelota.vx) < 12) {
-        this.pelota.vx = Math.sign(this.pelota.x - c.x || 1) * (55 + Math.random() * 45);
-        c.particula("nota", "#e0a32e", ahora);
-      }
-      if (nombre === "comer" && Math.hypot(c.x - PUNTOS.plato.x, c.y - PUNTOS.plato.y) < 4) {
-        this.comida = Math.max(0, this.comida - dt);
-      }
-    }
-
-    // ── Dibujo ────────────────────────────────────────────────────────
-    _dibujar(ahora) {
-      const ctx = this.ctx;
-      this._pared(ctx, ahora);
-      this._piso(ctx);
-      const c = this.criatura;
-      const enCama = !c.despierta && Math.hypot(c.x - PUNTOS.cama.x, c.y - PUNTOS.cama.y) < 6;
-      const capas = [
-        { y: 128, dibujar: () => this._cama(ctx) },
-        { y: 120, dibujar: () => this._planta(ctx) },
-        { y: 132, dibujar: () => this._cojin(ctx) },
-        { y: 138, dibujar: () => this._caja(ctx) },
-        { y: 149, dibujar: () => this._plato(ctx) },
-        { y: this.pelota.y + 3, dibujar: () => this._pelota(ctx) },
-        { y: enCama ? 129 : c.y, dibujar: () => c.dibujar(ctx, ahora) },
-      ].sort((a, b) => a.y - b.y);
-      for (const capa of capas) capa.dibujar();
-      if (enCama) this._manta(ctx, 22);
-      this._luz(ctx, ahora);
-      c.dibujarParticulas(ctx, ahora);
-    }
-
-    _rect(ctx, x, y, w, h, color) {
-      ctx.fillStyle = color;
-      ctx.fillRect(Math.round(x), Math.round(y), w, h);
-    }
-
-    _pared(ctx, ahora) {
-      this._rect(ctx, 0, 0, W, PISO, "#f1dfbf");
-      for (let x = 0; x < W; x += 8) this._rect(ctx, x, 0, 1, PISO, "#ead3ad");     // papel tapiz
-      for (let x = 4; x < W; x += 16) for (let y = 10; y < PISO - 6; y += 16) this._rect(ctx, x, y, 1, 1, "#e2c697");
-      this._rect(ctx, 0, PISO - 3, W, 3, "#c9a77a");                                  // zócalo
-      this._rect(ctx, 0, PISO - 3, W, 1, "#dcbf93");
-      this._ventana(ctx, ahora);
-      // Cuadro con un sol dibujado.
-      this._rect(ctx, 86, 26, 22, 18, "#8b6a47");
-      this._rect(ctx, 88, 28, 18, 14, "#fbf3df");
-      this._rect(ctx, 95, 32, 4, 4, "#f2b632");
-      for (const [dx, dy] of [[-2, 1], [5, 1], [1, -2], [1, 5]]) this._rect(ctx, 95 + dx, 32 + dy, 2, 2, "#f6cf6a");
-      this._rect(ctx, 89, 39, 16, 2, "#9ccf7a");
-      // Lámpara de pared sobre la cama.
-      this._rect(ctx, 38, 36, 1, 8, "#8b6a47");
-      this._rect(ctx, 33, 30, 11, 6, "#e8c170");
-      this._rect(ctx, 34, 31, 9, 1, "#f4dc9f");
-      this._rect(ctx, 36, 36, 5, 2, this._esNoche() ? "#fff4c2" : "#d9cfa8");
-    }
-
-    _cielo() {
-      const h = this.hora;
-      if (h < 5 || h >= 21) return ["#1b2350", "#2c3a6e", "noche"];
-      if (h < 7) return ["#f2a07b", "#f7d29a", "amanecer"];
-      if (h < 17.5) return ["#7ec4ef", "#c4e8fb", "dia"];
-      if (h < 19.5) return ["#f08a5d", "#f6c177", "atardecer"];
-      return ["#5b4b8a", "#c47ba2", "anochecer"];
-    }
-
-    _esNoche() {
-      return this.hora >= 20.5 || this.hora < 6;
-    }
-
-    _ventana(ctx, ahora) {
-      const x0 = 156, y0 = 16, w = 48, h = 44;
-      const [arriba, abajo, momento] = this._cielo();
-      this._rect(ctx, x0 - 2, y0 - 2, w + 4, h + 4, "#8b6a47");
-      for (let y = 0; y < h; y++) {
-        const mezcla = y / h + (((y * 7) % 3) - 1) * 0.04;
-        this._rect(ctx, x0, y0 + y, w, 1, mezcla < 0.5 ? arriba : abajo);
-      }
-      if (momento === "noche" || momento === "anochecer") {
-        for (let i = 0; i < 12; i++) {
-          const brillo = Math.sin(ahora / 500 + i * 2.1) > -0.3;
-          if (brillo) this._rect(ctx, x0 + 2 + ((i * 17) % (w - 4)), y0 + 2 + ((i * 11) % (h - 12)), 1, 1, "#fff7d6");
-        }
-        this._rect(ctx, x0 + 32, y0 + 6, 7, 7, "#f4ecc9");
-        this._rect(ctx, x0 + 34, y0 + 5, 7, 7, arriba);                    // luna menguante
-      } else {
-        const avance = Math.max(0, Math.min(1, (this.hora - 6) / 13));
-        const sx = x0 + 4 + avance * (w - 12);
-        const sy = y0 + 4 + Math.abs(avance - 0.5) * 2 * (h - 18);
-        this._rect(ctx, sx, sy, 6, 6, momento === "dia" ? "#ffe066" : "#ffb347");
-        if (momento === "dia") {
-          const nube = ((ahora / 900) % (w + 20)) - 14;
-          for (const [dx, dy, ancho] of [[0, 0, 10], [3, -2, 5], [16, 14, 8], [18, 12, 4]]) {
-            const nx = x0 + ((nube + dx + w) % (w + 10)) - 4;
-            if (nx > x0 && nx + ancho < x0 + w) this._rect(ctx, nx, y0 + 14 + dy, ancho, 2, "#ffffff");
-          }
-        }
-      }
-      this._rect(ctx, x0 + w / 2 - 1, y0, 2, h, "#8b6a47");                 // cruz del marco
-      this._rect(ctx, x0, y0 + h / 2 - 1, w, 2, "#8b6a47");
-      this._rect(ctx, x0 - 4, y0 + h + 2, w + 8, 3, "#a37d55");             // alféizar
-    }
-
-    _piso(ctx) {
-      this._rect(ctx, 0, PISO, W, H - PISO, "#d9b382");
-      for (let y = PISO + 6; y < H; y += 8) this._rect(ctx, 0, y, W, 1, "#c49a68");
-      for (let fila = 0; fila * 8 + PISO < H; fila++) {
-        for (let x = (fila % 2) * 24; x < W; x += 48) this._rect(ctx, x, PISO + fila * 8, 1, 7, "#c9a273");
-      }
-      // Alfombra bajo el cojín.
-      for (let y = -7; y <= 7; y++) {
-        const ancho = Math.round(34 * Math.sqrt(1 - (y / 8) ** 2));
-        this._rect(ctx, 128 - ancho, 133 + y, ancho * 2, 1, Math.abs(y) > 5 ? "#c58f6b" : (y % 2 ? "#e2c3a1" : "#dcb995"));
-      }
-    }
-
-    _cama(ctx) {
-      this._rect(ctx, 6, 100, 5, 28, "#8f5f33");          // cabecera
-      this._rect(ctx, 6, 100, 5, 2, "#a8743f");
-      this._rect(ctx, 10, 113, 50, 11, "#f4efe6");        // colchón
-      this._rect(ctx, 10, 122, 50, 2, "#ddd5c6");
-      this._rect(ctx, 12, 109, 14, 6, "#ffffff");         // almohada
-      this._rect(ctx, 12, 114, 14, 1, "#e6e0d6");
-      this._rect(ctx, 8, 124, 54, 4, "#a8743f");          // marco y patas
-      this._rect(ctx, 9, 128, 3, 2, "#8f5f33");
-      this._rect(ctx, 57, 128, 3, 2, "#8f5f33");
-      if (this.criatura.despierta) this._manta(ctx, 44);  // doblada a los pies
-    }
-
-    _manta(ctx, desde) {
-      this._rect(ctx, desde, 112, 60 - desde, 12, "#7aa6d6");
-      this._rect(ctx, desde, 112, 60 - desde, 2, "#9cc0e6");
-      for (let x = desde + 3; x < 58; x += 6) this._rect(ctx, x, 115, 2, 8, "#6893c4");
-    }
-
-    _planta(ctx) {
-      for (const [x, y, w, h, color] of [
-        [232, 86, 3, 22, "#4f8f37"], [238, 80, 3, 28, "#5ea343"], [244, 88, 3, 20, "#4f8f37"],
-        [229, 90, 5, 3, "#6fb54d"], [240, 82, 6, 3, "#6fb54d"], [245, 92, 5, 3, "#6fb54d"], [234, 96, 5, 3, "#5ea343"],
-      ]) this._rect(ctx, x, y, w, h, color);
-      this._rect(ctx, 230, 108, 20, 12, "#b5653a");       // maceta
-      this._rect(ctx, 229, 106, 22, 3, "#c8774a");
-      this._rect(ctx, 232, 116, 16, 1, "#9a522d");
-    }
-
-    _cojin(ctx) {
-      this._rect(ctx, 114, 125, 28, 7, "#c97c9a");
-      this._rect(ctx, 115, 124, 26, 2, "#e09ab4");
-      this._rect(ctx, 127, 127, 2, 2, "#a85f7c");
-    }
-
-    _caja(ctx) {
-      this._rect(ctx, 204, 117, 30, 21, "#c89b5e");
-      this._rect(ctx, 204, 117, 30, 3, "#b2854a");
-      this._rect(ctx, 201, 114, 10, 4, "#d7ad72");        // solapas abiertas
-      this._rect(ctx, 227, 114, 10, 4, "#d7ad72");
-      this._rect(ctx, 217, 120, 4, 18, "#e2c08a");        // cinta
-      this._rect(ctx, 204, 136, 30, 2, "#a8763f");
-    }
-
-    _plato(ctx) {
-      this._rect(ctx, 87, 144, 14, 4, "#d4574b");
-      this._rect(ctx, 86, 143, 16, 2, "#e67b6f");
-      this._rect(ctx, 89, 148, 10, 1, "#a8423a");
-      if (this.comida > 0) {
-        const cantidad = Math.ceil((this.comida / 7) * 5);
-        for (let i = 0; i < cantidad; i++) this._rect(ctx, 89 + i * 2, 142 - (i % 2), 2, 2, i % 2 ? "#9b6a3c" : "#c08a4f");
-      }
-    }
-
-    _pelota(ctx) {
-      const { x, y, giro } = this.pelota;
-      const bx = Math.round(x) - 4, by = Math.round(y) - 7;
-      this._rect(ctx, bx + 1, by + 8, 7, 1, "rgba(70,45,20,0.25)");
-      const filas = ["0011100", "0111110", "1111111", "1111111", "1111111", "0111110", "0011100"];
-      const franja = Math.round(giro) % 7;
-      filas.forEach((fila, j) => {
-        for (let i = 0; i < 7; i++) {
-          if (fila[i] !== "1") continue;
-          const blanco = (i + franja + 7) % 7 === 3 || j === 3;
-          this._rect(ctx, bx + i, by + j, 1, 1, blanco ? "#fff4f0" : "#e04e4e");
-        }
-      });
-      this._rect(ctx, bx + 2, by + 1, 1, 1, "#ffffff");
-    }
-
-    _luz(ctx, ahora) {
-      const [, , momento] = this._cielo();
-      const oscuridad = { noche: 0.5, anochecer: 0.25, amanecer: 0.18, atardecer: 0.08, dia: 0 }[momento];
-      if (!oscuridad) return;
-      const sombra = this.sombra.getContext("2d");
-      sombra.clearRect(0, 0, W, H);
-      sombra.globalCompositeOperation = "source-over";
-      sombra.fillStyle = `rgba(16, 20, 58, ${oscuridad})`;
-      sombra.fillRect(0, 0, W, H);
-      sombra.globalCompositeOperation = "destination-out";
-      const luces = [[38, 40, 58, 1]];
-      if (momento === "noche") luces.push([180, 70, 34, 0.5]);
-      for (const [x, y, radio, fuerza] of luces) {
-        const gradiente = sombra.createRadialGradient(x, y, 2, x, y, radio);
-        gradiente.addColorStop(0, `rgba(0,0,0,${0.9 * fuerza})`);
-        gradiente.addColorStop(1, "rgba(0,0,0,0)");
-        sombra.fillStyle = gradiente;
-        sombra.fillRect(0, 0, W, H);
-      }
-      ctx.drawImage(this.sombra, 0, 0);
-      if (momento === "noche") {
-        ctx.fillStyle = "rgba(255, 220, 140, 0.08)";
-        ctx.fillRect(10, 30, 60, 100);
-      }
-    }
-
-    // ── Tocar ─────────────────────────────────────────────────────────
-    _coordenadas(evento) {
-      const caja = this.lienzo.getBoundingClientRect();
-      return { x: ((evento.clientX - caja.left) / caja.width) * W, y: ((evento.clientY - caja.top) / caja.height) * H };
-    }
-
-    _objetoEn({ x, y }) {
-      if (this.criatura.contiene(x, y)) return "criatura";
-      if (Math.hypot(x - this.pelota.x, y - (this.pelota.y - 4)) < 7) return "pelota";
-      for (const [nombre, z] of Object.entries(ZONAS)) {
-        if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) return nombre;
-      }
-      return null;
-    }
-
-    _tocar(evento) {
-      const objeto = this._objetoEn(this._coordenadas(evento));
-      if (objeto && this.onTocar) this.onTocar(objeto);
+    if (nombre === "comer" && Math.hypot(c.x - PUNTOS.plato.x, c.z - PUNTOS.plato.z) < 0.2) {
+      this.comida = Math.max(0, this.comida - dt);
     }
   }
 
-  window.Habitacion = Habitacion;
-})();
+  _cielo() {
+    const h = this.hora;
+    if (h < 5 || h >= 21) return ["#141c44", "#2c3a6e", "noche"];
+    if (h < 7) return ["#f2a07b", "#f7d29a", "amanecer"];
+    if (h < 17.5) return ["#6fb9ec", "#c4e8fb", "dia"];
+    if (h < 19.5) return ["#f08a5d", "#f6c177", "atardecer"];
+    return ["#5b4b8a", "#c47ba2", "anochecer"];
+  }
+
+  _diaYNoche(ahora) {
+    const [arriba, abajo, momento] = this._cielo();
+    const ctx = this.lienzoCielo.getContext("2d");
+    const gradiente = ctx.createLinearGradient(0, 0, 0, 192);
+    gradiente.addColorStop(0, arriba);
+    gradiente.addColorStop(1, abajo);
+    ctx.fillStyle = gradiente;
+    ctx.fillRect(0, 0, 256, 192);
+    if (momento === "noche" || momento === "anochecer") {
+      for (let i = 0; i < 24; i++) {
+        if (Math.sin(ahora / 500 + i * 2.1) > -0.3) {
+          ctx.fillStyle = "#fff7d6";
+          ctx.fillRect((i * 67) % 250, (i * 41) % 130, 2, 2);
+        }
+      }
+      ctx.fillStyle = "#f4ecc9";
+      ctx.beginPath(); ctx.arc(190, 50, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = arriba;
+      ctx.beginPath(); ctx.arc(200, 44, 18, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const avance = Math.max(0, Math.min(1, (this.hora - 6) / 13));
+      ctx.fillStyle = momento === "dia" ? "#ffe066" : "#ffb347";
+      ctx.beginPath();
+      ctx.arc(20 + avance * 216, 30 + Math.abs(avance - 0.5) * 220, 16, 0, Math.PI * 2);
+      ctx.fill();
+      if (momento === "dia") {
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        const nube = (ahora / 60) % 320 - 40;
+        for (const [dx, dy, r] of [[0, 0, 14], [16, -6, 16], [32, 0, 12], [120, 50, 10], [134, 46, 12]]) {
+          ctx.beginPath(); ctx.arc((nube + dx + 320) % 320 - 30, 100 + dy, r, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    this.texturaCielo.needsUpdate = true;
+
+    if (momento === this._momento) return;
+    this._momento = momento;
+    const luz = { dia: 1, atardecer: 0.75, amanecer: 0.6, anochecer: 0.4, noche: 0.18 }[momento];
+    const colorSol = { dia: 0xfff1d6, atardecer: 0xffb27a, amanecer: 0xffc59a, anochecer: 0xb48ad0, noche: 0x7d8dd6 }[momento];
+    this.sol.intensity = 2.4 * luz;
+    this.sol.color.setHex(colorSol);
+    this.hemisferio.intensity = 0.35 + 0.9 * luz;
+    const encendida = momento === "noche" || momento === "anochecer";
+    this.lampara.intensity = encendida ? 9 : 0;
+    this.pantalla.material.emissive.setHex(encendida ? 0xffb347 : 0x000000);
+    this.pantalla.material.emissiveIntensity = encendida ? 1.2 : 0;
+    this.luzLuna.intensity = momento === "noche" ? 6 : 0;
+    this.escena.background.set(luz > 0.5 ? 0xe9e2d6 : 0x272842);
+  }
+
+  // ── Tocar ───────────────────────────────────────────────────────────
+  _objetoEn(evento) {
+    const caja = this.renderer.domElement.getBoundingClientRect();
+    const puntero = new THREE.Vector2(((evento.clientX - caja.left) / caja.width) * 2 - 1,
+      -((evento.clientY - caja.top) / caja.height) * 2 + 1);
+    this.raycaster.setFromCamera(puntero, this.camara);
+    const impacto = this.raycaster.intersectObjects(this._tocables, true)[0];
+    if (!impacto) return null;
+    let objeto = impacto.object;
+    while (objeto && !objeto.userData.objeto) objeto = objeto.parent;
+    return objeto ? objeto.userData.objeto : null;
+  }
+
+  _tocar(evento) {
+    const objeto = this._objetoEn(evento);
+    if (objeto && this.onTocar) this.onTocar(objeto);
+  }
+}

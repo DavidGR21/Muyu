@@ -43,7 +43,7 @@ from server.clock import Reloj
 from server.storage.db import BaseCriatura, ruta_de
 
 GESTOS_DE_ACCION = {"acariciar": "carino", "alimentar": "alegria", "jugar": "alegria", "regañar": "miedo"}
-# Lo que dice con estas intenciones no afirma nada que se pueda corregir con 👍/👎.
+# Lo que dice con estas intenciones no afirma nada que se pueda corregir asintiendo o negando.
 SIN_CONTENIDO = {"balbuceo", "dormida", "emocion", "imitar", "saludo", "confusion", "reconocer"}
 
 
@@ -115,7 +115,7 @@ class Muyu:
         self.ultima_resolucion: dict | None = None      # para corregir un "sí" que era un "no"
         self.ultimo_dicho: dict | None = None           # lo último que dijo, por si le dicen que está mal
         self._ultimo_mensaje: dict | None = None        # lo último que le escribiste
-        self._gesto_pendiente: dict | None = None       # un 👍/👎 que espera las palabras que lo acompañan
+        self._gesto_pendiente: dict | None = None       # un gesto de sí/no que espera las palabras que lo acompañan
         self.ultima_interaccion_real = ahora_real
         self.guardada_real = ahora_real
         self._ultimo_latido_real = ahora_real
@@ -433,7 +433,7 @@ class Muyu:
         salidas = self._sincronizar()
         vivido = self._vivir(horas * 3600, simulado=True)
         suenos = sum(1 for s in vivido if s["tipo"] == "habla" and s["intencion"] == "dormida")
-        resumen = f"⏩ Pasaron {duracion(horas * 3600)} para {self.nombre}"
+        resumen = f"Pasaron {duracion(horas * 3600)} para {self.nombre}"
         if suenos:
             resumen += f"; durmió {suenos} {'vez' if suenos == 1 else 'veces'}"
         resumen += "." if self.despierta else " y ahora está dormida."
@@ -506,7 +506,7 @@ class Muyu:
         self.sueno_por_contar = sueno.id
         self.pregunta_pendiente = None
         actividad = self.comportamiento.iniciar("dormir", "cama", motivo, self.reloj_real(), duracion=10**9)
-        aviso = (f"🌙 {self.nombre} se durmió ({motivo}). Repasó {len(sueno.reforzados)} conceptos "
+        aviso = (f"{self.nombre} se durmió ({motivo}). Repasó {len(sueno.reforzados)} conceptos "
                  f"y atenuó {len(sueno.atenuados)} recuerdos poco usados.")
         return [self._salida_actividad(actividad), self._aviso(aviso),
                 self._decir(Intencion("dormida", detalle="Consolida lo aprendido"), "sueno")]
@@ -526,7 +526,7 @@ class Muyu:
             evaluacion = Evaluacion("despertó descansada", novedad=0.1, agrado=0.3, control=0.6)
         self.emociones.sentir(evaluacion, ahora_real, ahora)
         actividad = self.comportamiento.iniciar("quieta", None, "se está despertando", ahora_real, duracion=6)
-        salidas = [self._salida_actividad(actividad), self._aviso(f"☀️ {self.nombre} {motivo}.")]
+        salidas = [self._salida_actividad(actividad), self._aviso(f"{self.nombre} {motivo}.")]
         if sueno:
             sueno.fin = ahora
             self._suenos_sucios.add(sueno.id)
@@ -740,7 +740,7 @@ class Muyu:
             hipotesis, respuesta = resumen.ambigua
             return Intencion("preguntar", [hipotesis.origen, hipotesis.destino], gesto="duda", tema=hipotesis.origen,
                              detalle=f"No sabe si «{respuesta}» quiere decir sí o no. "
-                                     f"Asiente 👍 o niega 👎 para enseñárselo"), hipotesis
+                                     f"Asiente o niega con los botones de gesto para enseñárselo"), hipotesis
         if resumen.confirmadas:
             hipotesis = resumen.confirmadas[0]
             return Intencion("celebrar", [hipotesis.origen, hipotesis.destino], tema=hipotesis.origen,
@@ -836,7 +836,7 @@ class Muyu:
     def _resolver(self, hipotesis: Hipotesis, frase: Frase, ahora: float, ahora_real: float) -> dict | None:
         """Interpreta la respuesta con lo que ya sabe: palabras de sí/no aprendidas, el tono
         emocional o que repitas la idea. Si no entiende la respuesta devuelve None: no adivina,
-        espera que asientas 👍 o niegues 👎 y así aprende qué significan esas palabras."""
+        espera que asientas o niegues y así aprende qué significan esas palabras."""
         palabras = frase.palabras
         polaridad = self.lexico.polaridad_de(palabras)
         tono = self._tono(palabras)
@@ -891,11 +891,11 @@ class Muyu:
                 return {"hipotesis": hipotesis, "motivo": "la regañaron cuando lo preguntó"}
         return None
 
-    # ── Gestos del dueño: 👍 asentir y 👎 negar ─────────────────────────
+    # ── Gestos del dueño: asentir y negar ────────────────────────────────
 
     def _gesto_del_dueno(self, signo: int) -> list[dict]:
         """Entender un gesto de sí o de no es innato, como sentir una caricia. Las palabras
-        no: las aprende porque acompañan al gesto ("no" + 👎 → "no" significa no)."""
+        no: las aprende porque acompañan al gesto ("no" + negar → "no" significa no)."""
         ahora, ahora_real = self.reloj.tiempo, self.reloj_real()
         nombre = "asentiste" if signo > 0 else "negaste"
         if not self.despierta:
@@ -1151,7 +1151,7 @@ class Muyu:
         if nueva <= self.etapa:
             return []
         self.etapa = nueva
-        return [self._aviso(f"🌱 ¡{self.nombre} pasó a la etapa {nueva}: {config.NOMBRES_ETAPA[nueva]}! "
+        return [self._aviso(f"¡{self.nombre} pasó a la etapa {nueva}: {config.NOMBRES_ETAPA[nueva]}! "
                             f"({activas} palabras activas)")]
 
     # ── Vista pública ────────────────────────────────────────────────────
