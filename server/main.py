@@ -8,19 +8,25 @@ Ejecutar desde la raíz del proyecto::
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import logging
 import mimetypes
+import os
 import re
 import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import numpy as np
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
 from server import config
+from server.audio.prosody import FRECUENCIA, analizar
+from server.audio.stt import Oido
 from server.brain.creature import Muyu
 from server.clock import latir_siempre
 
@@ -95,6 +101,25 @@ class Vivero:
             return criatura.adelantar(min(max(horas, 0.0), HORAS_MAXIMAS_ADELANTO))
         return []
 
+    async def procesar_voz(self, criatura: Muyu, mensaje: dict) -> list[dict]:
+        """Audio del micrófono (PCM de 16 bits, mono, 16 kHz, en base64): prosodia propia
+        y, si hay voz, texto con Whisper (en un hilo, para no detener a las criaturas)."""
+        try:
+            crudo = base64.b64decode(str(mensaje.get("audio", "")), validate=True)
+        except (binascii.Error, ValueError):
+            return [{"tipo": "aviso", "texto": "No se pudo leer el audio."}]
+        maximo = int(config.SEGUNDOS_VOZ_MAXIMOS * FRECUENCIA) * 2
+        muestras = np.frombuffer(crudo[: maximo - maximo % 2], dtype="<i2").astype(np.float32) / 32768
+        prosodia = await asyncio.to_thread(analizar, muestras)
+        texto = ""
+        if prosodia.con_voz:
+            texto = await asyncio.to_thread(oido.transcribir, muestras)
+        salidas = criatura.oir_voz(texto, prosodia)
+        if prosodia.con_voz and not texto and oido.estado != "listo":
+            salidas.insert(1, {"tipo": "aviso", "texto": f"Todavía no entiende palabras habladas: el oído está "
+                                                       f"{oido.estado} ({oido.detalle}). Reacciona solo a cómo suenas."})
+        return salidas
+
     def guardar_todo(self) -> None:
         for criatura in self.criaturas.values():
             criatura.cerrar()
@@ -102,11 +127,15 @@ class Vivero:
 
 
 vivero = Vivero(config.DIR_CRIATURAS)
+oido = Oido()
 
 
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
     tarea = asyncio.create_task(latir_siempre(vivero))
+    # Whisper se carga (y la primera vez se descarga) en segundo plano: el servidor arranca enseguida.
+    if os.getenv("MUYU_SIN_OIDO") != "1":
+        asyncio.get_running_loop().run_in_executor(None, oido.cargar)
     try:
         yield
     finally:
@@ -144,7 +173,10 @@ async def conexion(ws: WebSocket) -> None:
             mensaje = await _recibir(ws)
             if mensaje is None:
                 continue
-            salidas = vivero.procesar(criatura, mensaje)
+            if mensaje.get("tipo") == "voz":
+                salidas = await vivero.procesar_voz(criatura, mensaje)
+            else:
+                salidas = vivero.procesar(criatura, mensaje)
             criatura.guardar()
             await vivero.enviar(criatura.id, salidas + criatura.instantanea(cerebro=True))
     except WebSocketDisconnect:
@@ -155,7 +187,8 @@ async def conexion(ws: WebSocket) -> None:
 
 @app.get("/api/salud")
 def salud() -> dict:
-    return {"ok": True, "criaturas_vivas": len(vivero.criaturas), "velocidad_tiempo": config.VELOCIDAD_TIEMPO}
+    return {"ok": True, "criaturas_vivas": len(vivero.criaturas), "velocidad_tiempo": config.VELOCIDAD_TIEMPO,
+            "oido": oido.a_publico()}
 
 
 @app.get("/api/criaturas/{identificador}")
@@ -175,4 +208,14 @@ def ver_criatura(identificador: str) -> dict:
         criatura.db.cerrar()
 
 
-app.mount("/", StaticFiles(directory=config.DIR_WEB, html=True), name="web")
+class Interfaz(StaticFiles):
+    """Archivos de la interfaz: el navegador revalida cada vez (con ETag), así nunca usa
+    una versión vieja después de actualizar el proyecto."""
+
+    def file_response(self, *args, **kwargs):
+        respuesta = super().file_response(*args, **kwargs)
+        respuesta.headers["Cache-Control"] = "no-cache"
+        return respuesta
+
+
+app.mount("/", Interfaz(directory=config.DIR_WEB, html=True), name="web")
