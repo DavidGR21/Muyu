@@ -1,0 +1,271 @@
+:root {
+  --fondo: #f4efe6;
+  --superficie: #fffdf8;
+  --borde: #e6dccb;
+  --tinta: #2f2a24;
+  --apagado: #7a7064;
+  --brote: #5b8c3a;
+  --brote-claro: #e3efd6;
+  --tierra: #b5793c;
+  --activo: #5b8c3a;
+  --tenue: #d9a33b;
+  --latente: #b9b2a6;
+  --positivo: #3f9a62;
+  --negativo: #c8553d;
+  --deducido: #7a5fc0;
+  --sombra: 0 1px 2px rgba(60, 40, 10, .06), 0 6px 18px rgba(60, 40, 10, .07);
+  --radio: 14px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--tinta);
+  background: var(--fondo);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; }
+button { font: inherit; cursor: pointer; }
+.oculta { display: none !important; }
+.apagado { color: var(--apagado); }
+
+/* ── Barra superior ─────────────────────────────────────────────── */
+.barra {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 20px; background: var(--superficie); border-bottom: 1px solid var(--borde);
+  position: sticky; top: 0; z-index: 5;
+}
+.marca { display: flex; align-items: baseline; gap: 8px; font-size: 1.15rem; }
+.marca .logo { font-size: 1.4rem; }
+.marca .apagado { font-size: .85rem; }
+.etapa-chip {
+  background: var(--brote-claro); color: #35571f; padding: 4px 12px; border-radius: 999px;
+  font-size: .85rem; font-weight: 600;
+}
+.barra-derecha { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.conexion { font-size: .8rem; color: var(--apagado); }
+.boton-icono {
+  border: 1px solid var(--borde); background: var(--superficie); border-radius: 10px;
+  width: 36px; height: 34px; font-size: 1.05rem; line-height: 1;
+}
+.boton-icono.apagada { opacity: .5; }
+.solo-movil { display: none; }
+.conexion.conectada::before { content: "● "; color: var(--positivo); }
+.conexion.desconectada::before { content: "● "; color: var(--negativo); }
+
+/* ── Distribución ───────────────────────────────────────────────── */
+.contenido {
+  display: grid; grid-template-columns: minmax(340px, 1fr) minmax(360px, 1.05fr);
+  gap: 18px; padding: 18px 20px; max-width: 1400px; margin: 0 auto;
+}
+@media (max-width: 900px) {
+  .contenido { grid-template-columns: 1fr; padding: 12px; }
+}
+
+/* ── Habitación ─────────────────────────────────────────────────── */
+.habitacion { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.escena {
+  position: relative; background: #2c2440; border-radius: var(--radio);
+  box-shadow: var(--sombra); overflow: hidden; aspect-ratio: 16 / 10;
+}
+/* La habitación mide 256 × 160 píxeles y se agranda sin suavizar: pixel art nítido. */
+.escena canvas {
+  width: 100%; height: 100%; display: block; touch-action: manipulation;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+}
+.burbuja {
+  position: absolute; left: 50%; top: 20%; transform: translate(-50%, -100%);
+  max-width: 70%; padding: 8px 14px; border-radius: 16px; background: #fff;
+  box-shadow: var(--sombra); font-size: 1.1rem; font-weight: 600; text-align: center;
+  animation: aparecer .25s ease-out; pointer-events: none; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.burbuja::after {
+  content: ""; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+  border: 8px solid transparent; border-top-color: #fff; border-bottom: 0;
+}
+.burbuja.pensando { background: #f1edf9; color: #4b3b78; font-style: italic; font-weight: 500; }
+.burbuja.pensando::after { border-top-color: #f1edf9; }
+@keyframes aparecer { from { opacity: 0; } }
+.actividad { margin: -4px 2px 0; font-size: .88rem; color: var(--apagado); min-height: 1.2em; }
+.actividad b { color: var(--tinta); }
+.sonido-aviso {
+  position: absolute; right: 10px; bottom: 10px; background: rgba(255, 253, 248, .9);
+  font-size: .78rem; padding: 4px 10px; border-radius: 999px; pointer-events: none;
+}
+
+.estado-rapido {
+  position: absolute; left: 10px; top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  background: rgba(255, 253, 248, .88); padding: 4px 10px; border-radius: 999px; font-size: .78rem;
+  pointer-events: none;
+}
+.emocion-chip { font-weight: 700; text-transform: capitalize; }
+.mini { display: inline-flex; align-items: center; gap: 4px; }
+.mini-barra { width: 34px; height: 6px; background: #ece4d6; border-radius: 4px; overflow: hidden; display: inline-block; }
+.mini-barra span { display: block; height: 100%; background: var(--brote); transition: width .6s; }
+.esperando {
+  position: absolute; left: 10px; bottom: 10px; background: #f1edf9; color: #4b3b78;
+  font-size: .8rem; padding: 5px 10px; border-radius: 999px;
+}
+
+.acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.acciones button, .formulario button, .boton {
+  border: 1px solid var(--borde); background: var(--superficie); border-radius: 10px;
+  padding: 8px 12px; box-shadow: 0 1px 1px rgba(60, 40, 10, .05); transition: transform .08s, background .2s;
+}
+.acciones button:hover, .boton:hover { background: #fbf6ec; }
+.acciones button:active, .boton:active { transform: scale(.97); }
+.acciones .peligro:hover { background: #fbecea; }
+.acciones .separador { flex-basis: 100%; height: 0; }
+.acciones .gesto-si { border-color: #b9d6a5; }
+.acciones .gesto-si:hover { background: var(--brote-claro); }
+.acciones .gesto-no { border-color: #e5bdb4; }
+.acciones .gesto-no:hover { background: #fbecea; }
+.ayuda { margin: -4px 0 0; font-size: .78rem; color: var(--apagado); }
+
+.chat {
+  background: var(--superficie); border-radius: var(--radio); box-shadow: var(--sombra);
+  padding: 12px; height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+}
+.mensaje { max-width: 85%; padding: 7px 12px; border-radius: 14px; line-height: 1.35; }
+.mensaje.tu { align-self: flex-end; background: var(--brote); color: #fff; border-bottom-right-radius: 4px; }
+.mensaje.muyu { align-self: flex-start; background: #f3ede2; border-bottom-left-radius: 4px; }
+.mensaje.pensando { align-self: flex-start; background: #f1edf9; color: #4b3b78; font-style: italic; }
+.mensaje .quien { font-size: .72rem; color: var(--apagado); display: block; margin-bottom: 2px; font-style: normal; }
+.mensaje .por-que { display: block; font-size: .74rem; color: var(--apagado); margin-top: 3px; font-style: normal; }
+.mensaje.aviso { align-self: center; background: none; color: var(--apagado); font-size: .8rem; text-align: center; padding: 2px; }
+
+.formulario { display: flex; gap: 8px; }
+.formulario input {
+  flex: 1; font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--borde);
+  background: var(--superficie); outline: none;
+}
+.formulario input:focus { border-color: var(--brote); box-shadow: 0 0 0 3px var(--brote-claro); }
+.formulario button { background: var(--brote); color: #fff; border-color: var(--brote); font-weight: 600; }
+
+/* ── Panel del cerebro ──────────────────────────────────────────── */
+.panel {
+  background: var(--superficie); border-radius: var(--radio); box-shadow: var(--sombra);
+  display: flex; flex-direction: column; min-width: 0; max-height: calc(100vh - 90px); position: sticky; top: 70px;
+}
+@media (max-width: 900px) { .panel { max-height: none; position: static; } }
+.pestanas { display: flex; flex-wrap: wrap; flex: none; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--borde); }
+.pestanas button {
+  border: 0; background: none; padding: 8px 10px; border-radius: 8px 8px 0 0; color: var(--apagado);
+  border-bottom: 2px solid transparent; font-size: .9rem;
+}
+.pestanas button.activa { color: var(--tinta); border-bottom-color: var(--brote); font-weight: 600; }
+.vista { display: none; padding: 14px; overflow-y: auto; flex: 1; min-height: 0; }
+.vista.activa { display: block; }
+
+.tarjeta { border: 1px solid var(--borde); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.tarjeta h3 { margin: 0 0 10px; font-size: .95rem; display: flex; align-items: center; gap: 8px; }
+.nota { font-size: .78rem; color: var(--apagado); margin: 6px 0 0; }
+
+.fila { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 8px; margin: 6px 0; font-size: .85rem; }
+.fila .valor { text-align: right; font-variant-numeric: tabular-nums; color: var(--apagado); }
+.barra-pad { position: relative; height: 10px; background: #f0e9dc; border-radius: 6px; overflow: hidden; }
+.barra-pad::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #cfc3ae; }
+.barra-pad span { position: absolute; top: 0; bottom: 0; border-radius: 6px; transition: all .5s; }
+.barra-pad span.pos { background: var(--positivo); }
+.barra-pad span.neg { background: var(--negativo); }
+.barra-01 { height: 10px; background: #f0e9dc; border-radius: 6px; overflow: hidden; }
+.barra-01 span { display: block; height: 100%; background: var(--brote); border-radius: 6px; transition: width .5s; }
+.barra-01.tierra span { background: var(--tierra); }
+.chip { background: #f3ede2; padding: 2px 9px; border-radius: 999px; font-size: .8rem; font-weight: 600; }
+.chip.grande { font-size: .95rem; text-transform: capitalize; }
+
+.causas { list-style: none; margin: 0; padding: 0; font-size: .8rem; }
+.causas li { padding: 5px 0; border-bottom: 1px dashed var(--borde); display: flex; gap: 8px; justify-content: space-between; }
+.causas li:last-child { border: 0; }
+.causas .delta { font-variant-numeric: tabular-nums; color: var(--apagado); white-space: nowrap; }
+.rasgos { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Léxico */
+.progreso { height: 8px; background: #f0e9dc; border-radius: 6px; overflow: hidden; margin: 6px 0; }
+.progreso span { display: block; height: 100%; background: var(--brote); transition: width .5s; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.palabra {
+  position: relative; overflow: hidden; border-radius: 8px; padding: 3px 8px; font-size: .85rem;
+  background: #f6f1e7; border: 1px solid var(--borde); display: inline-flex; align-items: center; gap: 5px;
+}
+.palabra .imp { position: absolute; left: 0; bottom: 0; height: 3px; }
+.palabra.activo .imp { background: var(--activo); }
+.palabra.tenue .imp { background: var(--tenue); }
+.palabra.latente { color: #9a9286; }
+.palabra.latente .imp { background: var(--latente); }
+.palabra .val { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.palabra .val.pos { background: var(--positivo); }
+.palabra .val.neg { background: var(--negativo); }
+.palabra .val.neutra { background: #ddd3c3; }
+.palabra sup { font-size: .65rem; color: var(--deducido); }
+.vacio { color: var(--apagado); font-size: .85rem; font-style: italic; }
+
+/* Grafo */
+.grafo-contenedor { position: relative; height: 420px; border: 1px solid var(--borde); border-radius: 12px; overflow: hidden; background: #fffcf5; }
+.grafo-contenedor canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: .78rem; color: var(--apagado); margin-top: 10px; }
+.leyenda span { display: inline-flex; align-items: center; gap: 5px; }
+.punto { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.punto.activo { background: var(--activo); } .punto.tenue { background: var(--tenue); } .punto.latente { background: var(--latente); }
+.linea { width: 22px; height: 0; display: inline-block; border-top: 2px solid; }
+.linea.ensenado { border-color: #6b8f4e; }
+.linea.deducido { border-color: var(--deducido); }
+.linea.hipotesis { border-color: var(--deducido); border-top-style: dashed; }
+.linea.forma { border-color: #a89f92; border-top-style: dotted; }
+
+/* Pensamientos e hipótesis */
+.lista { list-style: none; margin: 0; padding: 0; }
+.lista li { display: flex; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--borde); }
+.lista li:last-child { border: 0; }
+.lista .icono { font-size: 1.2rem; line-height: 1.2; }
+.lista b { font-size: .95rem; }
+.lista small { color: var(--apagado); margin-left: 6px; }
+.lista p { margin: 3px 0 0; font-size: .82rem; color: #564d42; }
+.lista .dicho { color: #4b3b78; }
+.lista li.nuevo { animation: resaltar 1.6s ease-out; }
+@keyframes resaltar { from { background: #f1edf9; } }
+.hip .cadena { font-family: ui-monospace, Consolas, monospace; font-size: .82rem; color: #564d42; }
+.estado-chip { font-size: .72rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.estado-chip.pendiente { background: #f1edf9; color: #4b3b78; }
+.estado-chip.confirmada { background: var(--brote-claro); color: #35571f; }
+.estado-chip.rechazada { background: #fbecea; color: #8c3a29; }
+
+/* Tiempo */
+.botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.boton.peligro { color: var(--negativo); }
+.boton.confirmar { background: var(--negativo); color: #fff; border-color: var(--negativo); }
+code { font-size: .8rem; background: #f3ede2; padding: 1px 5px; border-radius: 5px; word-break: break-all; }
+
+/* ── Celular ────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .solo-movil { display: inline-block; }
+  .barra { padding: 8px 12px; gap: 8px; position: sticky; }
+  .marca .apagado { display: none; }
+  .habitacion { gap: 10px; }
+  /* El panel del cerebro se abre como un cajón desde abajo. */
+  .panel {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20;
+    height: 78dvh; max-height: none; border-radius: 18px 18px 0 0;
+    transform: translateY(105%); transition: transform .25s ease-out;
+    box-shadow: 0 -8px 30px rgba(40, 25, 5, .25);
+  }
+  .panel.abierto { transform: none; }
+  .pestanas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .pestanas button { flex: none; }
+  .chat { height: 200px; }
+  .formulario {
+    position: sticky; bottom: 0; background: var(--fondo);
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+  .formulario input { font-size: 16px; }   /* evita el zoom automático en iOS */
+}
+@media (max-width: 520px) {
+  .acciones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .acciones .separador { display: none; }
+  .acciones button { padding: 8px 4px; font-size: 1.1rem; }
+  .acciones button span { display: block; font-size: .68rem; color: var(--apagado); }
+  .estado-rapido .mini-barra { width: 22px; }
+  .burbuja { font-size: .95rem; max-width: 86%; }
+  .etapa-chip { font-size: .75rem; padding: 3px 8px; }
+  .ayuda { font-size: .72rem; }
+}
+.causas .evaluacion { font-size: .72rem; color: #7a6a9a; }
+.mensaje.pensando .quien { color: #6d5a9e; }

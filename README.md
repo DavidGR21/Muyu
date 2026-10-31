@@ -108,13 +108,13 @@ Igual que un bebé nace sabiendo llorar y buscar contacto, Muyu nace con **mecan
 | Detectar repetición | Nota qué aparece seguido y qué aparece junto |
 | Reaccionar a señales primarias | Caricia, comida y juego = positivo · regaño, grito = negativo |
 | Detectar preguntas | El signo `?` (en texto) o la entonación ascendente (en voz) indican que le preguntan algo |
-| Asentir y negar | Gestos innatos para responder sí o no antes de conocer esas palabras |
+| Asentir y negar | Gestos innatos para responder sí o no antes de conocer esas palabras, y para entender los 👍/👎 de su dueño |
 | Sentir necesidades | Energía y compañía bajan con el tiempo |
 | Curiosidad | Le llama la atención lo nuevo y lo que no termina de entender |
 | Pensar sola | Cuando no recibe estímulos, recorre lo que sabe |
 | Dormir | Consolida lo aprendido |
 
-Las **señales primarias** son la clave del aprendizaje. Muyu no sabe que "bien" es una palabra buena. Lo descubre porque "bien" suele aparecer cuando la acarician. Así se ancla el significado emocional del lenguaje (*grounding*). Del mismo modo aprende "sí" y "no": son las palabras que su dueño usa cuando confirma o corrige lo que ella dice.
+Las **señales primarias** son la clave del aprendizaje. Muyu no sabe que "bien" es una palabra buena. Lo descubre porque "bien" suele aparecer cuando la acarician. Así se ancla el significado emocional del lenguaje (*grounding*). Del mismo modo aprende "sí" y "no": son las palabras que su dueño usa cuando confirma o corrige lo que ella dice. Como en texto no hay forma de saber al principio si una respuesta es un sí o un no, el dueño la acompaña las primeras veces con un gesto (👍 asentir / 👎 negar), que Muyu entiende por instinto; si no entiende una respuesta, no adivina: vuelve a preguntar.
 
 ### 4.2 Percepción
 
@@ -186,7 +186,7 @@ Todo el razonamiento ocurre sobre la red de conceptos:
 2. **Encadenamiento:** si `A → B` y `B → C` con suficiente fuerza, propone `A → C` como **hipótesis**.
    > Le enseñan *"el fuego quema"* y otro día *"quemar duele"*. Muyu deduce: *"¿fuego… duele?"*
 3. **Confianza en la deducción:** el producto de los pesos del camino. Si es baja, **pregunta** en vez de afirmar.
-4. **Confirmación o corrección:** si el dueño confirma, la hipótesis se vuelve conocimiento. Si la corrige, baja su importancia (sin borrarse: puede recordar que alguna vez lo creyó).
+4. **Confirmación o corrección:** si el dueño confirma, la hipótesis se vuelve conocimiento. Si la corrige, baja su importancia (sin borrarse: puede recordar que alguna vez lo creyó). Un 👎 también corrige lo último que *afirmó*, y una negación aprendida ("Muyu no es papá") debilita la relación en ambos sentidos y las deducciones que se apoyaban en ella.
 5. **Generalización (durante el sueño):** agrupa los conceptos con conexiones parecidas en **categorías emergentes** (por ejemplo: cosas que se comen, cosas que asustan). Así puede razonar sobre cosas nuevas por parecido.
 6. **Contradicciones:** si aprende dos cosas incompatibles, se confunde (sube la incertidumbre) y lo expresa.
 
@@ -347,6 +347,7 @@ muyu/
 │   │   ├── questions.py        # Respuesta a preguntas
 │   │   ├── thoughts.py         # Pensamiento propio (monólogo)
 │   │   ├── emotions.py         # PAD, appraisal, ánimo, relación
+│   │   ├── behavior.py         # Comportamiento autónomo: qué hace su cuerpo y por qué (fase 2)
 │   │   ├── memory.py           # Memoria episódica
 │   │   ├── language/
 │   │   │   ├── babble.py       # Etapa 0: balbuceo
@@ -533,7 +534,7 @@ La fase 1 está **completa** cuando este guion funciona de principio a fin:
 2. **Primeras palabras:** le escribo varias veces *"hola Muyu"* y la acaricio → empieza a decir *"hola"* y la palabra "hola" toma valencia positiva.
 3. **Aprendizaje de relaciones:** le escribo *"el fuego quema"* y *"quemar duele"* → ambas relaciones aparecen en el grafo.
 4. **Deducción propia:** sin enseñárselo, Muyu dice o piensa *"¿fuego… duele?"* y la hipótesis aparece en el panel.
-5. **Confirmación:** respondo *"sí"* → la hipótesis pasa a conocimiento confirmado.
+5. **Confirmación:** respondo *"sí"* (la primera vez, junto con 👍 para que aprenda qué significa) → la hipótesis pasa a conocimiento confirmado.
 6. **Pregunta sí/no:** pregunto *"¿el fuego quema?"* → responde que sí (con palabra o gesto).
 7. **Pregunta abierta:** pregunto *"¿qué es fuego?"* → responde con sus relaciones (*"quema… duele"*).
 8. **Pregunta sin respuesta:** pregunto por algo que nunca le enseñé → muestra confusión o devuelve la pregunta.
