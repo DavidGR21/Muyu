@@ -34,7 +34,8 @@ from server.brain.language.ngram import INICIO, ModeloNgramas
 from server.brain.language.speaker import Hablante, Intencion
 from server.brain.lexicon import Lexico, Palabra
 from server.brain.memory import Episodio, MemoriaEpisodica
-from server.brain.perception import Evento, Frase, percibir_texto
+from server.audio.prosody import Calibracion, Percepcion, Prosodia
+from server.brain.perception import Evento, Frase, percibir_texto, percibir_voz
 from server.brain.questions import responder
 from server.brain.reasoning import PENDIENTE, RECHAZADA, Hipotesis, Razonador
 from server.brain.sleep import Sueno, consolidar
@@ -115,6 +116,7 @@ class Muyu:
         self.ultima_resolucion: dict | None = None      # para corregir un "sí" que era un "no"
         self.ultimo_dicho: dict | None = None           # lo último que dijo, por si le dicen que está mal
         self._ultimo_mensaje: dict | None = None        # lo último que le escribiste
+        self.calibracion = Calibracion()                # cómo suena normalmente la voz de su dueño
         self._gesto_pendiente: dict | None = None       # un gesto de sí/no que espera las palabras que lo acompañan
         self.ultima_interaccion_real = ahora_real
         self.guardada_real = ahora_real
@@ -170,6 +172,8 @@ class Muyu:
             criatura.sueno_por_contar = extra.get("sueno_por_contar")
             criatura.pregunta_pendiente = extra.get("pregunta_pendiente")
             criatura.ultima_resolucion = extra.get("ultima_resolucion")
+            if extra.get("voz"):
+                criatura.calibracion = Calibracion(**extra["voz"])
         relacion = db.leer_uno("relacion")
         if relacion:
             criatura.emociones.cargar_relacion(relacion)
@@ -222,6 +226,7 @@ class Muyu:
                 "sueno_por_contar": self.sueno_por_contar,
                 "pregunta_pendiente": self.pregunta_pendiente,
                 "ultima_resolucion": self.ultima_resolucion,
+                "voz": self.calibracion.a_dict(),
             }),
         }])
         db.guardar("relacion", [self.emociones.a_fila_relacion(ahora)])
@@ -249,26 +254,47 @@ class Muyu:
 
     # ── Entradas ─────────────────────────────────────────────────────────
 
-    def oir(self, texto: str) -> list[dict]:
-        """El dueño le escribe algo."""
+    def oir_voz(self, texto: str, prosodia: Prosodia) -> list[dict]:
+        """El dueño le habla con el micrófono. Cómo suena (prosodia) llega directo a sus
+        emociones; lo que dice (texto de Whisper) pasa por el lenguaje como si lo escribiera."""
+        percepcion = self.calibracion.percibir(prosodia)
+        self.calibracion.aprender(prosodia)
+        oido = {"tipo": "oido", "datos": {"texto": texto, "prosodia": prosodia.a_dict(),
+                                          "percepcion": percepcion.descripcion()}}
+        if not prosodia.con_voz:
+            return [oido]
+        if texto:
+            return [oido] + self.oir(texto, (prosodia, percepcion))
+        return [oido] + self._reaccionar_al_tono(prosodia, percepcion)
+
+    def oir(self, texto: str, voz: tuple[Prosodia, Percepcion] | None = None) -> list[dict]:
+        """El dueño le escribe algo (o se lo dice en voz alta, si llega ``voz``)."""
         salidas = self._sincronizar()
         ahora, ahora_real = self.reloj.tiempo, self.reloj_real()
-        evento = percibir_texto(texto, ahora_real)
+        percepcion = voz[1] if voz else None
+        if voz:
+            evento = percibir_voz(texto, voz[0].a_dict(), percepcion.pregunta, percepcion.grito, ahora_real)
+        else:
+            evento = percibir_texto(texto, ahora_real)
         if not evento.frases:
             return salidas
         if not self.despierta:
-            return salidas + [self._decir(Intencion("dormida", detalle="Está dormida: no escucha"), "respuesta")]
+            if not (percepcion and percepcion.grito):
+                return salidas + [self._decir(Intencion("dormida", detalle="Está dormida: no escucha"), "respuesta")]
+            salidas += self._despertar("se despertó asustada por un grito", brusco=True)
 
         saludo = self._inicio_sesion
         self._inicio_sesion = False
         self._contacto(ahora_real, 0.05)
         self.necesidades.estimular(0.2)
-        salidas += self._atender(ahora_real, "te escucha")
+        salidas += self._cuerpo_al_oir(percepcion, ahora_real)
         intensidad = self._intensidad(ahora_real)
         resumen = _Resumen()
         pregunta: Frase | None = None
 
         for frase in evento.frases:
+            if voz and not frase.es_pregunta and self.lexico.es_interrogativa(frase.palabras[0]):
+                frase.es_pregunta = True
             respondida = None if frase.es_pregunta else self._hipotesis_respondida(frase, ahora_real)
             oido = self.lexico.oir(frase, ahora, intensidad, saludo=saludo, respuesta=respondida is not None)
             self.ngramas.aprender(frase.palabras)
@@ -317,12 +343,20 @@ class Muyu:
         self._anclar_gesto_pendiente(ahora_real)
         if evento.es_grito:
             self._aplicar_senal(instincts.SENALES["grito"], ahora, ahora_real)
+        elif percepcion and percepcion.suave:
+            self._aplicar_senal(instincts.SENALES["voz_suave"], ahora, ahora_real)
+        elif percepcion and percepcion.firme:
+            self._aplicar_senal(instincts.SENALES["voz_firme"], ahora, ahora_real)
         self.red.activar({c: 1.0 for c in resumen.conceptos}, ahora, ahora_real)
         self.emociones.sentir(self._evaluar_mensaje(evento, resumen), ahora_real, ahora)
 
         pensamientos = {h.id: self._pensamiento_de_hipotesis(h) for h in resumen.hipotesis}
         avisos = self._revisar_etapa()
         intencion, preguntada = self._elegir_respuesta(evento, pregunta, resumen, ahora, ahora_real)
+        if evento.es_grito:
+            # El susto pesa más que las palabras: gime aunque le hayan dicho algo amable.
+            intencion, preguntada = Intencion("gemido", gesto="sobresalto", detalle=(
+                "El grito la asustó, aunque tus palabras fueran amables")), None
         habla = self._decir(intencion, "respuesta")
         if preguntada and preguntada.id in pensamientos:
             pensamientos[preguntada.id].en_voz_alta = True
@@ -696,6 +730,49 @@ class Muyu:
         actividad = self.comportamiento.atender(ahora_real, motivo, self.emociones.ambivalencia(ahora_real) > 0)
         return [self._salida_actividad(actividad)]
 
+    def _cuerpo_al_oir(self, percepcion: Percepcion | None, ahora_real: float) -> list[dict]:
+        """Cómo reacciona su cuerpo a cómo le hablas: se acerca a una voz suave y huye de un grito."""
+        if percepcion and percepcion.grito:
+            actividad = self.comportamiento.iniciar("esconderse", "caja", "tu grito la asustó", ahora_real)
+            return [self._salida_actividad(actividad)]
+        if percepcion and percepcion.suave:
+            actividad = self.comportamiento.acercarse(ahora_real, "tu voz suave la atrae",
+                                                      self.emociones.ambivalencia(ahora_real) > 0)
+            return [self._salida_actividad(actividad)]
+        return self._atender(ahora_real, "te mira con cautela" if percepcion and percepcion.firme else "te escucha")
+
+    def _reaccionar_al_tono(self, prosodia: Prosodia, percepcion: Percepcion) -> list[dict]:
+        """Oyó tu voz pero no entendió ninguna palabra: reacciona solo a cómo sonó."""
+        salidas = self._sincronizar()
+        ahora, ahora_real = self.reloj.tiempo, self.reloj_real()
+        if not self.despierta:
+            if not percepcion.grito:
+                return salidas + [self._decir(Intencion("dormida", detalle="Está dormida: no escucha"), "reaccion")]
+            salidas += self._despertar("se despertó asustada por un grito", brusco=True)
+        self._contacto(ahora_real, 0.03)
+        senal = "grito" if percepcion.grito else "voz_suave" if percepcion.suave else "voz_firme" if percepcion.firme else None
+        if senal:
+            self._aplicar_senal(instincts.SENALES[senal], ahora, ahora_real)
+        else:
+            self.emociones.sentir(Evaluacion("oyó tu voz", novedad=0.25, agrado=0.1, del_dueno=True,
+                                             detalle="no entendió las palabras"), ahora_real, ahora)
+        salidas += self._cuerpo_al_oir(percepcion, ahora_real)
+        if percepcion.grito:
+            intencion = Intencion("gemido", gesto="sobresalto", detalle="Tu grito la asustó")
+        elif percepcion.suave:
+            intencion = Intencion("emocion", gesto="carino", detalle="No entendió las palabras, pero tu voz suave le gustó")
+        elif percepcion.firme:
+            intencion = Intencion("emocion", gesto="miedo", detalle="Tu voz firme sonó a regaño")
+        else:
+            intencion = Intencion("curiosear", detalle="Oyó tu voz pero no entendió palabras")
+        habla = self._decir(intencion, "reaccion")
+        self.memoria.registrar({
+            "tipo": "voz", "accion": None, "palabras": [], "conceptos": [], "prosodia": prosodia.a_dict(),
+            "respuesta": habla["texto"],
+            "momento": datetime.fromtimestamp(ahora_real).isoformat(timespec="seconds"),
+        }, self.emociones.actual(ahora_real), ahora, ahora_real)
+        return salidas + [habla]
+
     def _actividad_por_accion(self, accion: str, ahora_real: float) -> list[dict]:
         if accion == "alimentar":
             actividad = self.comportamiento.iniciar("comer", "plato", "come lo que le diste", ahora_real, "dueño")
@@ -706,8 +783,11 @@ class Muyu:
             actividad = self.comportamiento.iniciar(
                 "esconderse", "caja", f"el regaño la asustó (seguridad {self.necesidades.seguridad:.0%})", ahora_real)
         else:
-            return self._atender(ahora_real, {"acariciar": "disfruta tu caricia",
-                                              "regañar": "te mira asustada"}.get(accion, "te mira"))
+            if accion == "acariciar":
+                actividad = self.comportamiento.acercarse(ahora_real, "disfruta tu caricia",
+                                                          self.emociones.ambivalencia(ahora_real) > 0)
+                return [self._salida_actividad(actividad)]
+            return self._atender(ahora_real, "te mira asustada" if accion == "regañar" else "te mira")
         return [self._salida_actividad(actividad)]
 
     def _rechazar_comida(self, ahora: float, ahora_real: float) -> list[dict]:

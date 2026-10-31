@@ -34,6 +34,7 @@
         </div>
         <div id="burbuja" class="burbuja oculta" aria-live="polite"></div>
         <div id="actividad" class="hud hud-actividad"></div>
+        <div id="grabacion" class="hud hud-escucha oculta"><i data-icono="audio-lines"></i><span id="estado-mic"></span><span class="nivel"><span id="nivel-mic"></span></span></div>
         <div id="esperando" class="hud hud-esperando oculta"><i data-icono="circle-help"></i>Espera tu respuesta</div>
         <div class="hud hud-ayuda"><i data-icono="info"></i>Arrastra para girar · rueda para acercar · toca a Muyu, la pelota, el plato o su camita</div>
       </div>
@@ -57,7 +58,10 @@
       <section class="chat-dock">
         <div id="chat" class="chat" aria-live="polite"></div>
         <form id="formulario" class="formulario" autocomplete="off">
-          <input id="entrada" maxlength="500" placeholder="Escríbele a Muyu… (prueba «hola Muyu»)">
+          <button type="button" id="boton-mic" class="boton-mic" title="Micrófono" data-icono="mic"></button>
+          <div class="campo">
+            <input id="entrada" maxlength="500" placeholder="Háblale o escríbele a Muyu… (prueba «hola Muyu»)">
+          </div>
           <button type="submit" class="boton-primario" title="Enviar" data-icono="send"></button>
         </form>
       </section>

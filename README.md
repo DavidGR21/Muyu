@@ -303,8 +303,11 @@ Estas señales son **instintivas**: llegan directo al modelo emocional sin pasar
 
 ### 5.3 Voz de Muyu
 
-- **Etapas 0 a 3:** sintetizador procedural propio en el navegador (Web Audio API). Sílabas generadas con tono y ritmo según su emoción. Suena a criatura, no a robot.
+- **Balbuceo (sin palabras):** sintetizador procedural propio en el navegador (Web Audio API). Sílabas generadas con tono y ritmo según su emoción. Suena a criatura, no a robot.
+- **Palabras:** cuando lo que dice tiene palabras, las pronuncia con una voz del sistema **instalada en la PC** (síntesis de voz del navegador, solo voces locales: las voces en línea se descartan), aguda y con tono y velocidad según su emoción. Como Whisper, solo convierte texto en sonido: no decide qué decir.
 - **Etapas 4 y 5 (opcional):** [Piper](https://github.com/rhasspy/piper) local para leer sus frases, con velocidad y tono ajustados a su estado emocional.
+
+**Escucha continua:** el micrófono queda abierto y detecta solo cuándo le hablas (cada frase se envía al terminar un silencio). Mientras Muyu habla, o mientras piensa su respuesta, deja de escuchar para no oírse a sí misma. Se enciende con el primer toque en la página y se apaga con el botón del micrófono.
 
 ### 5.4 Micrófono en el celular
 
@@ -370,6 +373,7 @@ muyu/
 │   ├── brain-panel.js          # Panel: emociones, léxico, grafo, pensamientos
 │   ├── room.js                 # Habitación 3D: objetos, luz del día y de la noche (fase 2)
 │   ├── voice.js                # Sintetizador de criatura (fase 2)
+│   ├── mic.js                  # Micrófono: graba la voz y la envía a 16 kHz (fase 3)
 │   ├── icons.js                # Iconos (Lucide, copiados localmente)
 │   └── vendor/                 # three.js (MIT) y licencias, sin CDN
 ├── data/creatures/             # <id>.sqlite (no se sube al repo)
@@ -377,6 +381,7 @@ muyu/
 │   ├── whisper/                # Modelo abierto descargado (fase 3, no se sube)
 │   └── creatures/              # Pesos neuronales propios por criatura (fase 4)
 ├── certs/                      # Certificados HTTPS locales (fase 3, no se suben)
+├── scripts/https.ps1           # Genera los certificados y sirve por HTTPS (fase 3)
 ├── tests/
 ├── requirements.txt
 ├── .gitignore
@@ -440,6 +445,10 @@ mkcert -key-file certs/key.pem -cert-file certs/cert.pem localhost 127.0.0.1 <IP
 uvicorn server.main:app --host 0.0.0.0 --port 8443 \
   --ssl-keyfile certs/key.pem --ssl-certfile certs/cert.pem
 ```
+
+En Windows, `scripts/https.ps1` hace los dos últimos pasos: genera los certificados para `localhost` y la IP de la PC (los regenera si la IP cambia) y arranca el servidor en `https://<IP>:8443`.
+
+En la PC no hace falta HTTPS: `http://localhost:8000` ya permite el micrófono. Whisper usa la CPU por defecto; con `MUYU_WHISPER_DISPOSITIVO=cuda` usa la GPU si están instaladas las librerías de NVIDIA (si fallan, vuelve solo a la CPU). El modelo se elige con `MUYU_WHISPER_MODELO` (`tiny`, `base` o `small`).
 
 ### 8.5 Modo de tiempo acelerado
 

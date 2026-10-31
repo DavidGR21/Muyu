@@ -3,3 +3,4 @@ uvicorn[standard]
 numpy
 pytest
 httpx  # lo usa el TestClient de FastAPI en las pruebas del servidor
+faster-whisper  # fase 3: voz a texto local (el modelo se descarga una vez a models/whisper/)

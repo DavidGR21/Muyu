@@ -61,6 +61,10 @@ SENALES = {
     "regañar": Senal("regañar", -1.0, -0.6, 0.6, 0.20, -0.06, -0.03, seguridad=-0.1),
     # Un grito (en texto: escribir en mayúsculas) asusta aunque las palabras sean amables.
     "grito": Senal("grito", -0.6, -0.3, 0.7, 0.30, -0.03, -0.01, seguridad=-0.1),
+    # Con voz (fase 3): una voz suave y aguda suena a cariño; fuerte y grave, a regaño.
+    "voz_suave": Senal("voz_suave", 0.6, 0.35, 0.0, 0.05, 0.01, 0.03, compania=0.05, seguridad=0.06,
+                       necesidad="compania"),
+    "voz_firme": Senal("voz_firme", -0.5, -0.3, 0.3, 0.10, -0.02, -0.01, seguridad=-0.04),
 }
 
 # Asentir y negar son gestos del dueño que Muyu entiende sin palabras, como una

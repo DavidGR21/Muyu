@@ -14,6 +14,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent.parent
 DIR_WEB = RAIZ / "web"
 DIR_CRIATURAS = Path(os.getenv("MUYU_DIR_CRIATURAS", str(RAIZ / "data" / "creatures")))
+DIR_WHISPER = Path(os.getenv("MUYU_DIR_WHISPER", str(RAIZ / "models" / "whisper")))
 
 # ── Tiempo ────────────────────────────────────────────────────────────────
 # 1 = tiempo real · 60 = un minuto real equivale a una hora de la criatura.
@@ -109,3 +110,14 @@ FACTOR_ATENUACION_SUENO = 0.85
 UMBRALES_ETAPA = {1: 1, 2: 3, 3: 8}
 NOMBRES_ETAPA = {0: "Balbuceo", 1: "Imitación", 2: "Palabra-frase", 3: "Dos palabras"}
 FRECUENCIA_IMITACION = 3            # en la etapa 1 solo repite lo que oyó mucho
+
+# ── Voz (fase 3) ──────────────────────────────────────────────────────────
+WHISPER_MODELO = os.getenv("MUYU_WHISPER_MODELO", "base")    # tiny · base · small
+# cpu funciona en cualquier PC; cuda acelera si están instaladas las librerías de NVIDIA (cuBLAS, cuDNN).
+WHISPER_DISPOSITIVO = os.getenv("MUYU_WHISPER_DISPOSITIVO", "cpu")
+SEGUNDOS_VOZ_MAXIMOS = 20.0
+PROSODIA_PISO_DB = -50.0            # por debajo es silencio
+PROSODIA_VOLUMEN_HABITUAL_DB = -26.0  # volumen de voz normal hasta que conozca la de su dueño
+PROSODIA_GRITO_DB = -12.0           # desde aquí (o saturando el micrófono) es un grito
+PROSODIA_SUAVE_DB = -33.0           # hasta aquí es una voz suave
+SUBIDA_PREGUNTA = 1.12              # el tono del final sube un 12 %: pregunta

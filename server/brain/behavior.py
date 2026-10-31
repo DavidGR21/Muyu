@@ -29,17 +29,19 @@ DESCRIPCIONES = {
     "quieta": "Se queda tranquila", "explorar": "Explora", "jugar": "Juega con la pelota",
     "mirar_ventana": "Mira por la ventana", "descansar": "Descansa en el cojín", "pedir_comida": "Te pide comida",
     "buscarte": "Te busca", "esconderse": "Se esconde", "aburrirse": "Se aburre", "ir_a_dormir": "Se va a dormir",
-    "atenderte": "Te presta atención", "comer": "Come", "dormir": "Duerme",
+    "atenderte": "Te presta atención", "acercarse": "Se acerca a ti", "comer": "Come", "dormir": "Duerme",
 }
 DURACIONES = {
     "quieta": (6, 12), "explorar": (8, 14), "jugar": (12, 20), "mirar_ventana": (8, 14), "descansar": (12, 22),
     "pedir_comida": (10, 14), "buscarte": (10, 16), "esconderse": (12, 24), "aburrirse": (10, 16),
     "ir_a_dormir": (5, 5), "comer": (7, 7), "atenderte": (config.ATENCION_S, config.ATENCION_S),
+    "acercarse": (config.ATENCION_S, config.ATENCION_S),
     "dormir": (10**9, 10**9),
 }
 URGENTES = {"pedir_comida", "esconderse", "ir_a_dormir"}
 # Cuánto le quita el aburrimiento cada segundo de actividad.
-ESTIMULO = {"jugar": 0.03, "explorar": 0.02, "mirar_ventana": 0.008, "comer": 0.01, "atenderte": 0.0}
+ESTIMULO = {"jugar": 0.03, "explorar": 0.02, "mirar_ventana": 0.008, "comer": 0.01, "atenderte": 0.0,
+            "acercarse": 0.0}
 
 
 @dataclass
@@ -183,9 +185,14 @@ class Comportamiento:
         return self.actual
 
     def atender(self, ahora_real: float, motivo: str, ambivalente: bool = False) -> Actividad:
-        """El dueño interactúa: deja lo que hace y lo mira (por un rato)."""
+        """El dueño interactúa: deja lo que hace y lo mira desde donde está (por un rato)."""
         self.frustracion = 0.0
-        return self.iniciar("atenderte", "frente", motivo, ahora_real, "dueño", ambivalente)
+        return self.iniciar("atenderte", None, motivo, ahora_real, "dueño", ambivalente)
+
+    def acercarse(self, ahora_real: float, motivo: str, ambivalente: bool = False) -> Actividad:
+        """Algo del dueño la atrae (una caricia, una voz suave): va hacia él."""
+        self.frustracion = 0.0
+        return self.iniciar("acercarse", "frente", motivo, ahora_real, "dueño", ambivalente)
 
     def frustrar(self) -> None:
         self.frustracion = min(1.0, self.frustracion + 0.5)

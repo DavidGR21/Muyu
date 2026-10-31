@@ -107,5 +107,16 @@ def percibir_texto(texto: str, ahora_real: float) -> Evento:
     return Evento("mensaje", ahora_real, texto=texto, frases=frases, prosodia=prosodia)
 
 
+def percibir_voz(texto: str, prosodia: dict, pregunta: bool, grito: bool, ahora_real: float) -> Evento:
+    """Lo que oyó con el micrófono: el texto viene de Whisper (sin signos de pregunta);
+    la pregunta y el grito los decide su propia prosodia."""
+    evento = percibir_texto(texto, ahora_real)
+    evento.tipo = "voz"
+    evento.prosodia = {**prosodia, "volumen": 0.95 if grito else 0.5, "fuente": "voz"}
+    if pregunta and evento.frases:
+        evento.frases[-1].es_pregunta = True
+    return evento
+
+
 def percibir_accion(accion: str, ahora_real: float) -> Evento:
     return Evento("accion", ahora_real, accion=accion)

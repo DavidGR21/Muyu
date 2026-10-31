@@ -138,6 +138,24 @@ i[data-icono] { display: inline-flex; font-style: normal; }
   background: var(--superficie-2); outline: none; min-width: 0;
 }
 .formulario input:focus { border-color: var(--acento); background: #fff; box-shadow: 0 0 0 3px var(--acento-claro); }
+.campo { position: relative; flex: 1; display: flex; min-width: 0; }
+.campo input { width: 100%; }
+.hud-escucha { left: 50%; bottom: 12px; transform: translateX(-50%); color: var(--negativo); background: #fcefecf2; }
+.hud-escucha[data-estado="enviando"] { color: #a6741b; background: #fdf3dcf2; }
+.hud-escucha .nivel { width: 70px; height: 5px; border-radius: 4px; background: #f3d6cf; overflow: hidden; }
+.hud-escucha .nivel span { display: block; height: 100%; width: 0; background: currentColor; transition: width .08s; }
+.boton-mic {
+  display: grid; place-items: center; width: 42px; border: 1px solid var(--borde); border-radius: 10px;
+  background: var(--superficie-2); color: var(--tinta-suave);
+}
+.boton-mic:hover { background: #fff; color: var(--acento); }
+.boton-mic.escuchando { background: var(--acento-claro); border-color: #b9d6a5; color: var(--acento); }
+.boton-mic.grabando { background: var(--negativo); border-color: var(--negativo); color: #fff; animation: latido 1.2s infinite; }
+.boton-mic.procesando { opacity: .6; cursor: progress; }
+.boton-mic:disabled { opacity: .45; cursor: not-allowed; }
+@keyframes latido { 50% { box-shadow: 0 0 0 6px rgba(200, 85, 61, .2); } }
+.mensaje.tu .voz { display: flex; align-items: center; gap: 4px; font-size: .7rem; opacity: .85; margin-top: 2px; }
+.mensaje.tu .voz .icono { width: 12px; height: 12px; }
 .boton-primario {
   display: grid; place-items: center; width: 42px; border: 0; border-radius: 10px;
   background: var(--acento); color: #fff;
